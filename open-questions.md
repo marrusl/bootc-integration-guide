@@ -4,23 +4,17 @@ title: Open questions
 permalink: /open-questions/
 ---
 
-This guide's core model, read-only image content, how `/var` and `/etc` behave, the three-way merge on upgrades, checks out against upstream bootc documentation and RHEL's own image mode documentation. What follows is narrower: the specific places where that verification stopped short of certainty, a detail the documentation didn't cover, a claim that only checks out against a neighboring source rather than the one we'd want, or an answer that's sitting on a real system somewhere, waiting for someone to check it.
+This guide's core model, read-only image content, how `/var` and `/etc` behave, the three-way merge on upgrades, checks out against upstream bootc documentation and RHEL's own image mode documentation. What follows is narrower: specifics that need a live system or a real build to settle rather than documentation alone, plus a couple of wording calls that are ours to make.
 
 Each entry names what the guide currently says, what's still open, and the smallest concrete thing that would close it. If you can answer one, open a pull request or an issue. Publishing pre-1.0 with the door open is the whole point.
 
-## If you have a RHEL 10 system in package mode
+## If you have a booted RHEL 10 system
 
-### `/tmp`: how does image mode compare to traditional RHEL?
+### Does package-mode RHEL default to a tmpfs `/tmp`?
 
-The filesystem table doesn't have a `/tmp` row, because the table compares two columns and only one of them is settled.
+Does a traditional, package-mode RHEL 10 install default to a tmpfs `/tmp`, the way image mode does, or does it stay disk-backed? The filesystem table skips a `/tmp` row until that's settled.
 
-**The image mode column is answered.** Inspecting `registry.redhat.io/rhel10/rhel-bootc:latest` directly (2026-08-11): the image ships `tmp.mount` from `systemd-257-23.el10_2.2`, and it is enabled, via a `local-fs.target.wants/tmp.mount` symlink present in the image itself. `/tmp` is a real directory in the image, so the unit's `ConditionPathIsSymbolicLink=!/tmp` passes. The unit mounts `tmpfs` with `size=50%,nr_inodes=1m,mode=1777,nosuid,nodev`. So on image mode, `/tmp` is RAM-backed, capped at half of system memory, and empty after a reboot.
-
-**The traditional column isn't.** The enablement symlink is not owned by any package (`rpm -qf` reports no owner, and `rpm -ql systemd` doesn't list it), and no systemd preset in the image refers to `tmp.mount`. So the enablement is something the bootc image composition does, not a systemd package default, which points to package-mode RHEL 10 *not* getting a tmpfs `/tmp` by default. That's an inference from package contents, not an observation of a running system, and installer flows could do their own thing.
-
-**What would settle it:** `findmnt /tmp` and `systemctl is-enabled tmp.mount` on a booted RHEL 10 system installed in package mode. If it comes back disk-backed, the row goes in as a genuine difference between the two modes.
-
-## If you have a booted RHEL 10 bootc system
+**What would settle it:** `findmnt /tmp` and `systemctl is-enabled tmp.mount` on a booted RHEL 10 host installed in package mode.
 
 ### How SELinux labels behave across a deploy
 
@@ -43,17 +37,11 @@ The guide's Containerfile example builds a driver against the image's own kernel
 
 One prerequisite that isn't obvious: the build has to run somewhere entitled. The base image ships with no repository configuration and no entitlement certificates of its own (`/etc/yum.repos.d/` and `/etc/pki/entitlement/` are both empty, and `dnf repolist` inside it reports no repositories), so it picks up RHEL content from a registered build host or from entitlement certificates mounted as build secrets. Pulling the image needs only a registry login; building the example needs entitlement. On an unregistered host the build stops at the first `dnf install` for want of repositories, which tells you nothing about whether the example is correct.
 
-## If you have access we don't
+### Whether `dkms` really needs no CodeReady Builder packages
 
-### The CodeReady Builder aside
+The guide's kernel-module section notes that some EPEL packages need the CodeReady Builder repository enabled, and that `dkms` itself doesn't. That claim was checked against CentOS Stream's package metadata, which mirrors RHEL's repository layout closely but isn't RHEL's own metadata.
 
-The guide notes that some EPEL packages need the CodeReady Builder repository enabled, that `dkms` itself doesn't, and it points readers to Red Hat's own documentation for the exact command rather than naming one, because the repository id and how you enable it depend on how the build is entitled.
-
-Half of this is now answered. Red Hat's article on enabling CodeReady Builder prescribes `subscription-manager repos --enable`, an entitlement operation, and doesn't mention `dnf config-manager` at all. That's why the sentence stays as it is: the enablement path really does depend on how the build is entitled, and naming a repository id would fix in place something that varies with it. The id stays out on purpose.
-
-What's still open is narrower: the claim that `dkms` itself doesn't need CRB was checked against CentOS Stream's package metadata, which mirrors RHEL's repository layout closely but isn't RHEL's own metadata.
-
-**What would settle it:** on an entitled RHEL 10 system, `dnf repoquery --requires --resolve dkms` against your own repositories, not a Stream mirror. A successful build of the kernel-module example above also settles it in passing, since that build installs `dkms` with CRB disabled.
+**What would settle it:** on an entitled RHEL 10 system, `dnf repoquery --requires --resolve dkms` against your own repositories, not a Stream mirror. A successful build of the kernel-module example above settles it in passing too, since that build installs `dkms` with CRB disabled.
 
 ## Calls we haven't made yet
 
