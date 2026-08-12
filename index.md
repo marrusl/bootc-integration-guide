@@ -9,8 +9,6 @@ If your product is already container-native, you can skip most of this guide. St
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-Three things this guide is not. It isn't an effort estimate. Some fixes are one Containerfile line; a self-updater or one of the refactoring cases above is release-cycle work, and only you can size it for your product. It isn't a certification or support statement. It tells you what works technically, not what any partner program covers. And it isn't a snapshot of a frozen platform. bootc keeps moving, and some of the walls below are actively being lowered.
-
 **Version 0.7, written against RHEL 10 image mode and bootc as of 2026-08-11.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
