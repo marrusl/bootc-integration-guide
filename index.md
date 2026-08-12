@@ -292,9 +292,9 @@ Installing your package to `/opt` in a Containerfile works fine: the files becom
 
 A flat `/opt/myvendor/` that contains all of these will not work as-is.
 
-The standard fix is to separate the writable content, and the two patterns are owned by different people.
+The standard fix is to separate the writable content, and the recommended place to do it is the image build.
 
-In the image build: move writable directories to `/var` and create symlinks back. Ship this snippet in your integration docs:
+Move writable directories to `/var` and create symlinks back. Ship this snippet in your integration docs:
 
 ```dockerfile
 RUN dnf install -y myvendor-agent && \
@@ -304,7 +304,9 @@ RUN dnf install -y myvendor-agent && \
     ln -sr /var/lib/myvendor /opt/myvendor/data
 ```
 
-In your own package: `BindPaths=` in the systemd unit you ship mounts writable directories into the read-only tree at service start, with no change to the installed file layout:
+That snippet needs a companion, and this is the part that's easy to miss. The `mv` puts your log and data directories into the image's `/var`, and image content in `/var` lands only on a system's first deployment. On a machine that was already running before your package arrived, those directories are never created, the symlinks point at nothing, and the first write fails. Ship `tmpfiles.d` entries in your package so they exist on every system, per [the `/var` rules](#var-starts-from-the-image-then-belongs-to-the-machine). Use `tmpfiles.d` rather than `StateDirectory=` here, because a symlink target has to exist whether or not your service has ever started, and `bootc container lint` warns when image content under `/var` has no matching entry, which catches the omission in the build.
+
+There is a second option this guide describes without recommending it: `BindPaths=` in the systemd unit you ship mounts writable directories into the read-only tree at service start, with no change to the installed file layout.
 
 ```ini
 [Service]
@@ -312,21 +314,13 @@ BindPaths=/var/log/myvendor:/opt/myvendor/logs
 BindPaths=/var/lib/myvendor:/opt/myvendor/data
 ```
 
-That snippet needs one companion piece. `BindPaths=` fails the unit at startup when the source directory is missing, and image content in `/var` is applied only on a system's first deployment, so you cannot count on `/var/log/myvendor` being there on a machine that was deployed before your package arrived. Ship a `tmpfiles.d` file in your package to create it:
-
-```
-# /usr/lib/tmpfiles.d/myvendor.conf
-d /var/log/myvendor 0755 root root -
-d /var/lib/myvendor 0755 root root -
-```
-
-`systemd-tmpfiles-setup.service` is ordered before `sysinit.target`, so these directories exist well before any normal service unit starts. `StateDirectory=` and `LogsDirectory=` in the unit are the alternative, and they let systemd own the permissions for you, but they create the directory only when the unit itself runs. A `tmpfiles.d` entry puts it there either way, which is what you want if a log shipper, a backup job, or an admin also needs the path.
+It earns its place in one situation: your installed layout can't be restructured, and you want the customer's Containerfile to stay clean. It needs the same `tmpfiles.d` entries as the symlink pattern, and it is stricter about them, failing the unit at startup rather than at the first write when a source directory is missing.
 
 One scope note on `BindPaths=`: your service sees the whole filesystem normally, and what it writes lands in the real `/var/log/myvendor`, where everything on the host can reach it. What is local to the unit is the path alias. Your service sees a writable `/opt/myvendor/logs`; every other process (helper CLIs, cron jobs, other units, an admin shell) still sees the read-only image content at that path. Use it when all writes come from the service itself; if other tools read or write there too, use the symlink pattern instead.
 
-If neither pattern fits because your `/opt` tree can't be restructured, there is a third documented option: a state overlay (`RUN systemctl enable ostree-state-overlay@opt.service`) makes `/opt` writable with a persistent overlay, where image files win over local edits on update. Treat it as the escape hatch, not the default: every write to the overlay is machine-local drift that no image digest accounts for, so you trade away part of the auditability the read-only model exists to provide. Upstream recommends the symlink pattern first because it keeps the most content read-only.
+If neither fits, because the writes don't all come from one service and the tree can't be restructured, there is a third documented option: a state overlay (`RUN systemctl enable ostree-state-overlay@opt.service`) makes `/opt` writable with a persistent overlay, where image files win over local edits on update. Treat it as the escape hatch, not the default: every write to the overlay is machine-local drift that no image digest accounts for, so you trade away part of the auditability the read-only model exists to provide. Upstream recommends the symlink pattern first because it keeps the most content read-only.
 
-**What to do:** Split writable content out of `/opt`. Give customers the symlink snippet for their Containerfile, or ship `BindPaths=` in your own unit file when only your service writes there. The best long-term fix is in your next release: move binaries to `/usr/lib/<package>/` and runtime data to `/var/lib/<package>/` so the split disappears.
+**What to do:** Split writable content out of `/opt`. Give customers the symlink snippet for their Containerfile, and ship `tmpfiles.d` entries so the `/var` targets exist on every machine, not just newly deployed ones. The best long-term fix is in your next release: move binaries to `/usr/lib/<package>/` and runtime data to `/var/lib/<package>/` so the split disappears.
 
 ### `/usr/local`: same rules as `/usr`
 

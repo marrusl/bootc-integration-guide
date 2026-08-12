@@ -24,13 +24,18 @@ There's no SELinux section in this guide. That's deliberate rather than an omiss
 
 ### Whether `BindPaths=` into a read-only `/opt` starts cleanly
 
-The `/opt` section offers `BindPaths=` in a shipped systemd unit as a way to get a writable directory into the read-only tree. The mechanism is documented: upstream bootc's build guidance and RHEL's image mode documentation both carry the same example line, and systemd's own documentation settles the semantics, including that the unit gets its own mount namespace and that the bind mount is writable unless the source mount is read-only. What none of those sources shows is the pattern running on a deployed system. Three things about it are reasoned rather than observed:
+The `/opt` section describes `BindPaths=` in a shipped systemd unit as a way to get a writable directory into the read-only tree. The mechanism is documented: upstream bootc's build guidance and RHEL's image mode documentation both carry the same example line, and systemd's own documentation settles the semantics, including that the unit gets its own mount namespace and that the bind mount is writable unless the source mount is read-only. What none of those sources shows is the pattern running on a deployed system. Two things about it are reasoned rather than observed:
 
 - Whether the bind mount succeeds at all when the destination sits on the composefs-backed read-only `/opt`. Mounting over an existing directory shouldn't need the underlying filesystem to be writable, and the directory is there because the package created it at build time, but that's an inference.
 - What SELinux does with it. The source directory carries its own labels (`/var/log/...` is `var_log_t`), and a confined service reaching that content through an `/opt` path may be denied where it would have been allowed at the original path.
-- Whether the source directory exists at all on a system that's already been deployed. Image content in `/var` lands only on the first deployment, so a unit shipping nothing but the two `BindPaths=` lines has no guarantee its sources are present, and a missing source fails the unit at namespace setup unless the definition is prefixed with `-`. A `tmpfiles.d` entry or `StateDirectory=` is the fix, and the `/opt` section doesn't currently say so.
 
-**What would settle it:** on a booted system, `systemd-run -p BindPaths=/var/log/example:/opt/example/logs --pty /bin/bash`, then `findmnt /opt/example/logs` inside that shell and a write into it with SELinux enforcing, checking `ausearch -m avc -ts recent` afterward. That covers all three in one pass.
+**What would settle it:** on a booted system, `systemd-run -p BindPaths=/var/log/example:/opt/example/logs --pty /bin/bash`, then `findmnt /opt/example/logs` inside that shell and a write into it with SELinux enforcing, checking `ausearch -m avc -ts recent` afterward. That covers both in one pass.
+
+### Whether security tooling sees through a `BindPaths=` alias
+
+This is part of why the `/opt` section describes `BindPaths=` without recommending it. Under the symlink pattern the path stays self-describing: `/opt/<vendor>/logs` is a symlink, visible as one to anything that stats it, and a tool that resolves symlinks reaches the real content. Under `BindPaths=` a tool walking the filesystem from outside the service's namespace sees an ordinary directory holding whatever the image shipped, with nothing to indicate another view exists. A root-level agent can still get the truth, through `/proc/<pid>/mountinfo`, `/proc/<pid>/root/`, or `nsenter -t <pid> -m`, but only if it knows to look at that PID. So the risk lands on file integrity monitoring, log collection, and compliance scans that work from a configured list of paths rather than from a running process. Whether the tools your customers actually run work that way isn't something this guide can answer.
+
+**What would settle it:** a report from the field. If you've run file integrity monitoring or a compliance scanner against a bootc host with a `BindPaths=` unit on it, we'd like to know whether the tool saw the aliased path or the image content sitting behind it.
 
 ## If you have an entitled RHEL build host
 
@@ -54,16 +59,6 @@ The guide's kernel-module section notes that some EPEL packages need the CodeRea
 **What would settle it:** on an entitled RHEL 10 system, `dnf repoquery --requires --resolve dkms` against your own repositories, not a Stream mirror. A successful build of the kernel-module example above settles it in passing too, since that build installs `dkms` with CRB disabled.
 
 ## Calls we haven't made yet
-
-### Should `BindPaths=` be a recommendation, or an option we only describe?
-
-The `/opt` section currently recommends it: the "What to do" line tells vendors to ship `BindPaths=` in their own unit when only their service writes to the path. The pattern is established, not invented here. Upstream bootc's build guidance and RHEL's image mode documentation both offer it as an alternative to the symlink pattern, and both stop at the example line. The scope caveat this guide adds after it, that the remap exists only inside that unit's mount namespace, appears in neither.
-
-That caveat is what makes this a judgment call rather than a fact question. A reader who skims past it comes away thinking the path is writable. What they actually get is one path telling two different stories: the service writes successfully, while an admin running `ls` on the same path sees stale image content and concludes logging is broken, a log shipper aimed there collects nothing, and a helper CLI writing there fails read-only. In all three cases the data was fine and the path lied. The symlink pattern has no such split, which is why this guide leads with it and why upstream does too.
-
-Security tooling is the sharpest version of that, and it's where the two patterns stop being equivalent. Under the symlink pattern the path stays self-describing: `/opt/<vendor>/logs` is a symlink, visible as one to anything that stats it, and a tool that resolves symlinks reaches the real content. Under `BindPaths=` a tool walking the filesystem from outside the service's namespace sees an ordinary directory holding whatever the image shipped, with nothing to indicate another view exists. A root-level agent can still get the truth, through `/proc/<pid>/mountinfo`, `/proc/<pid>/root/`, or `nsenter -t <pid> -m`, but only if it knows to look at that PID. So the risk lands on file integrity monitoring, log collection, and compliance scans that work from a configured list of paths rather than from a running process. Whether the tools your customers actually run work that way isn't something this guide can answer.
-
-**What would settle it:** one call, in an issue or a pull request, on whether the "What to do" line keeps recommending `BindPaths=` or steps back to describing it as an option the guide doesn't endorse. The scanner half needs a report from the field rather than a call: if you've run file integrity monitoring or a compliance scanner against a bootc host with a `BindPaths=` unit on it, we'd like to know whether the tool saw the aliased path or the image content sitting behind it.
 
 ### Should transient root get a mention alongside state overlays?
 
