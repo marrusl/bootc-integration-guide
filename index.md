@@ -34,6 +34,7 @@ RHEL image mode has a different filesystem model than traditional RHEL. Once you
 | `/etc` | Read-write, RPM-managed | Read-write, but merges differently on upgrades |
 | `/var` | Read-write | **Read-write** (the main place for persistent runtime data) |
 | `/run` | tmpfs | tmpfs (same as traditional) |
+| `/tmp` | Disk-backed | **tmpfs** (RAM-backed, 50% of system memory, empty after reboot) |
 
 That's the headline: **read-only root, read-write `/var` and `/etc`.** Your binaries, libraries, and default configs ship in the image. Your runtime data, logs, and caches go in `/var`. Local config customization goes in `/etc`.
 

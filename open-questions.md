@@ -10,12 +10,6 @@ Each entry names what the guide currently says, what's still open, and the small
 
 ## If you have a booted RHEL 10 system
 
-### Does package-mode RHEL default to a tmpfs `/tmp`?
-
-Does a traditional, package-mode RHEL 10 install default to a tmpfs `/tmp`, the way image mode does, or does it stay disk-backed? The filesystem table skips a `/tmp` row until that's settled.
-
-**What would settle it:** `findmnt /tmp` and `systemctl is-enabled tmp.mount` on a booted RHEL 10 host installed in package mode.
-
 ### How SELinux labels behave across a deploy
 
 There's no SELinux section in this guide. That's deliberate rather than an omission: whether labels get reapplied fresh at each deploy from the image's own policy, and whether customizing a label means changing policy in the build rather than running `restorecon` against a live system, isn't something we could confirm without a system to check it against.
@@ -48,15 +42,9 @@ The guide's Containerfile example builds a driver against the image's own kernel
 - Whether the pinned `kernel-devel-"$kver"` install resolves cleanly against RHEL's package naming
 - Whether `install -D ... -t` creates the target directory tree the way the example assumes
 
-**What would settle it:** one build of the example against `registry.redhat.io/rhel10/rhel-bootc:latest`. Three of the four come back from the build itself, since each fails loudly if the example is wrong: a build error, not something a partner ships and discovers later. The self-signing question needs one extra look inside the built image, `modinfo` on the module for a signature block and a glance at `/etc/dkms/framework.conf`.
+**What would settle it:** one build of the example against `registry.redhat.io/rhel10/rhel-bootc:latest`. Three of the four come back from the build itself, since each fails loudly if the example is wrong: a build error, not something a partner ships and discovers later. The self-signing question needs one extra look inside the built image, `modinfo` on the module for a signature block and a glance at `/etc/dkms/framework.conf`. A successful build also confirms a related claim in the guide: that `dkms` itself needs no CodeReady Builder packages, since the build installs it with only default repos plus EPEL.
 
 One prerequisite that isn't obvious: the build has to run somewhere entitled. The base image ships with no repository configuration and no entitlement certificates of its own (`/etc/yum.repos.d/` and `/etc/pki/entitlement/` are both empty, and `dnf repolist` inside it reports no repositories), so it picks up RHEL content from a registered build host or from entitlement certificates mounted as build secrets. Pulling the image needs only a registry login; building the example needs entitlement. On an unregistered host the build stops at the first `dnf install` for want of repositories, which tells you nothing about whether the example is correct.
-
-### Whether `dkms` really needs no CodeReady Builder packages
-
-The guide's kernel-module section notes that some EPEL packages need the CodeReady Builder repository enabled, and that `dkms` itself doesn't. That claim was checked against CentOS Stream's package metadata, which mirrors RHEL's repository layout closely but isn't RHEL's own metadata.
-
-**What would settle it:** on an entitled RHEL 10 system, `dnf repoquery --requires --resolve dkms` against your own repositories, not a Stream mirror. A successful build of the kernel-module example above settles it in passing too, since that build installs `dkms` with CRB disabled.
 
 ## Calls we haven't made yet
 
