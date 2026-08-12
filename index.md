@@ -355,16 +355,16 @@ The subtlest gotchas live here: what merges, what carries forward, and what reve
 
 ### Your defaults, their customizations, and the `/etc` merge
 
-On traditional RHEL, vendor default configs and customer customizations both live in `/etc`, managed by RPM's `%config` directives. On image mode, the split is cleaner:
+On traditional RHEL, vendor default configs and local customizations both live in `/etc`, managed by RPM's `%config` directives. On image mode, the split is cleaner:
 
 | What | Where | Why |
 |------|-------|-----|
 | **Your vendor defaults** | `/usr/share/<package>/` or `/usr/lib/<package>/` | Ships with the image, read-only, updated when the image is rebuilt |
-| **Customer customization** | `/etc/<package>/` or `/etc/<package>.conf` | Persistent, survives upgrades, customer-controlled |
+| **Local customization** | `/etc/<package>/` or `/etc/<package>.conf` | Persistent, survives upgrades, set on the machine |
 
-**Why this matters:** On image mode, `/etc` uses a 3-way merge on upgrades. The merge happens on the machine when the new deployment is created (during `bootc upgrade` or `bootc switch`), not during the image build, and it operates per file: a locally modified file is kept wholesale. There is no line-level merging and there are no conflict markers. If the customer has modified a file in `/etc`, their version wins, and your updated default will **not** be applied. Metadata changes count too: a `chown` or a permissions change on a config file pins it locally the same as an edit. If your defaults and the customer's customizations are in the same file, you have a problem.
+**Why this matters:** On image mode, `/etc` uses a 3-way merge on upgrades. The merge happens on the machine when the new deployment is created (during `bootc upgrade` or `bootc switch`), not during the image build, and it operates per file: a locally modified file is kept wholesale. There is no line-level merging and there are no conflict markers. If a file in `/etc` has been modified locally, the local version wins, and your updated default will **not** be applied. Metadata changes count too: a `chown` or a permissions change on a config file pins it locally the same as an edit. If your defaults and the local changes are in the same file, you have a problem.
 
-**What to do:** Ship your defaults in `/usr/lib/` or `/usr/share/` and treat `/etc` as the customer's override space: have the application read `/etc/myapp.conf` if it exists and fall back to `/usr/share/myapp/myapp.conf.default`. It is the same pattern systemd and modern Linux services already use. Your defaults then update cleanly with the image, and customer customizations persist independently.
+**What to do:** Ship your defaults in `/usr/lib/` or `/usr/share/` and treat `/etc` as local override space: have the application read `/etc/myapp.conf` if it exists and fall back to `/usr/share/myapp/myapp.conf.default`. It is the same pattern systemd and modern Linux services already use. Your defaults then update cleanly with the image, and local customizations persist independently.
 
 **Specific `/etc` gotcha, `/etc/passwd` and `/etc/group`:** If **any** local change touches `/etc/passwd` (upstream's stock example is setting a root password), subsequent image updates that add new system users will **not** take effect on that machine. So don't write to `/etc/passwd` from your package: create system users with `sysusers.d`, or use `DynamicUser=yes` for service accounts. Avoid build-time `useradd` for a second reason too: it can allocate a different UID on each image rebuild, which breaks ownership of data already persisted in `/var`.
 
