@@ -312,7 +312,17 @@ BindPaths=/var/log/myvendor:/opt/myvendor/logs
 BindPaths=/var/lib/myvendor:/opt/myvendor/data
 ```
 
-One scope note on `BindPaths=`: it remaps the path only inside that unit's mount namespace. Your service sees a writable `/opt/myvendor/logs`; every other process (helper CLIs, cron jobs, other units, an admin shell) still sees the read-only image content at that path. Use it when all writes come from the service itself; if other tools write there too, use the symlink pattern instead.
+That snippet needs one companion piece. `BindPaths=` fails the unit at startup when the source directory is missing, and image content in `/var` is applied only on a system's first deployment, so you cannot count on `/var/log/myvendor` being there on a machine that was deployed before your package arrived. Ship a `tmpfiles.d` file in your package to create it:
+
+```
+# /usr/lib/tmpfiles.d/myvendor.conf
+d /var/log/myvendor 0755 root root -
+d /var/lib/myvendor 0755 root root -
+```
+
+`systemd-tmpfiles-setup.service` is ordered before `sysinit.target`, so these directories exist well before any normal service unit starts. `StateDirectory=` and `LogsDirectory=` in the unit are the alternative, and they let systemd own the permissions for you, but they create the directory only when the unit itself runs. A `tmpfiles.d` entry puts it there either way, which is what you want if a log shipper, a backup job, or an admin also needs the path.
+
+One scope note on `BindPaths=`: your service sees the whole filesystem normally, and what it writes lands in the real `/var/log/myvendor`, where everything on the host can reach it. What is local to the unit is the path alias. Your service sees a writable `/opt/myvendor/logs`; every other process (helper CLIs, cron jobs, other units, an admin shell) still sees the read-only image content at that path. Use it when all writes come from the service itself; if other tools read or write there too, use the symlink pattern instead.
 
 If neither pattern fits because your `/opt` tree can't be restructured, there is a third documented option: a state overlay (`RUN systemctl enable ostree-state-overlay@opt.service`) makes `/opt` writable with a persistent overlay, where image files win over local edits on update. Treat it as the escape hatch, not the default: every write to the overlay is machine-local drift that no image digest accounts for, so you trade away part of the auditability the read-only model exists to provide. Upstream recommends the symlink pattern first because it keeps the most content read-only.
 
