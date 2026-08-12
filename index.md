@@ -11,7 +11,7 @@ Why this guide exists: upstream bootc docs are written for the people who build 
 
 Three things this guide is not. It isn't an effort estimate. Some fixes are one Containerfile line; a self-updater or one of the refactoring cases above is release-cycle work, and only you can size it for your product. It isn't a certification or support statement. It tells you what works technically, not what any partner program covers. And it isn't a snapshot of a frozen platform. bootc keeps moving, and some of the walls below are actively being lowered.
 
-**Version 0.6, written against RHEL 10 image mode and bootc as of 2026-08-11.**
+**Version 0.7, written against RHEL 10 image mode and bootc as of 2026-08-11.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
@@ -269,6 +269,8 @@ Or use `StateDirectory=mypackage` in your systemd unit file (recommended: it cre
 3. **Never create a physical `/var/run` directory.** `/var/run` is a symlink to `/run`. A package that creates it as a real directory is shipping a bug, and `bootc container lint` fails the build on it. Nothing under `/run` survives a reboot.
 
 `/var` also survives rollbacks, which has consequences of its own; see [Rollbacks](#rollbacks-etc-reverts-var-does-not).
+
+One more path worth knowing: `/tmp` is a tmpfs on image mode, sized at half of system memory and empty after every reboot. If your software stages large files there, it is spending RAM, and `/var` is the better place for anything sizable or anything that has to survive a restart.
 
 **What to do:** Create your `/var` directories with `tmpfiles.d` or `StateDirectory=`, and treat `/var` as machine-local from day two. `bootc container lint` warns when image content under `/var` has no matching `tmpfiles.d` entry.
 
