@@ -26,9 +26,9 @@ There's no SELinux section in this guide. That's deliberate rather than an omiss
 
 ### The kernel-module build example
 
-The guide's Containerfile example builds a driver against the image's own kernel in a discarded builder stage, using DKMS, and signs the result if you supply your own key. It has never actually been built. Every line traces back to a real source, but four of those sources are the DKMS project itself, or general coreutils and Containerfile documentation, rather than RHEL's own packaged DKMS specifically:
+The guide's Containerfile example builds a driver against the image's own kernel in a discarded builder stage, using DKMS. It has never actually been built. Every line traces back to a real source, but four of those sources are the DKMS project itself, or general coreutils and Containerfile documentation, rather than RHEL's own packaged DKMS specifically:
 
-- Whether the packaged `dkms` self-signs modules by default inside a builder stage, and where the key material lands. The guide's Secure Boot paragraph is written to hold either way, so nothing in it is wrong if the answer turns out to be no; knowing the answer would just let it say more.
+- Whether the packaged `dkms` self-signs modules by default inside a builder stage, and where the key material lands. The guide's Secure Boot passage makes the general point that a key generated inside a builder stage is discarded with the stage; if `dkms` generates one on its own by default, that is a concrete case worth naming.
 - The exact path the built module lands at under `/var/lib/dkms/`
 - Whether the pinned `kernel-devel-"$kver"` install resolves cleanly against RHEL's package naming
 - Whether `install -D ... -t` creates the target directory tree the way the example assumes

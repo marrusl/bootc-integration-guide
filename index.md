@@ -77,7 +77,7 @@ The patterns in this guide, in one table. Each row links to the section with the
 | Config files in `/etc` only | Works, but upgrade behavior differs | Defaults in `/usr`, overrides in `/etc` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
 | `%post` creates users with `useradd` | Risky, `/etc/passwd` drift | Use `sysusers.d` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
 | Expecting `/etc` and `/var` to move together on rollback | They don't | Design for the asymmetry | [Rollbacks](#rollbacks-etc-reverts-var-does-not) |
-| Catching all of the above in CI | Yes, recommended for every build | Add `RUN bootc container lint` to the build | [Lint](#run-bootc-container-lint-in-the-build) |
+| Catching all of the above in a build | Yes, recommended for every build | Run `bootc container lint` on your test builds; ship the line in your snippet | [Lint](#run-bootc-container-lint-in-the-build) |
 
 ## At image build time
 
@@ -94,7 +94,7 @@ RUN dnf install -y your-package && dnf clean all
 
 The wall is *when*, not *how*. RPM packaging is not a requirement: the build can run your install script (`RUN ./install.sh`), `COPY` in unpackaged content, or unpack a tarball, and the result ships in the image like anything else. Whatever your installer does, it runs under the build-environment caveats in the next section (no systemd, no hardware, no booted kernel).
 
-What fails is installation on a running system. `dnf` is present, but installs fail against the read-only `/usr`. The same `curl | bash` script that works as a `RUN` step in the build fails with a read-only filesystem error after deployment, and so does an RPM an admin tries to install post-deploy. Your software needs to go in during the image build, whatever format it arrives in. (There is one transient exception for debugging; see [Debugging](#debugging-on-a-running-system).)
+What fails is installation on a running system. `dnf` is present, so the command runs, but it fails with a read-only filesystem error against `/usr`. So does the `curl | bash` script that worked as a `RUN` step in the build, and so does an RPM an admin installs post-deploy. (There is one transient exception for debugging; see [Debugging](#debugging-on-a-running-system).)
 
 **What to do:** Provide customers with a Containerfile snippet they can add to their image build: a documented `RUN dnf install` line, or a `RUN ./install.sh` with any build-unsafe steps removed. This is the image mode equivalent of "add our repo and install our RPM."
 
@@ -145,11 +145,11 @@ The trap isn't the toolchain; it's the kernel. A container build can install com
 The pieces:
 
 - `uname -r` during the container build reports the build host's kernel, not the image's. If your build uses it to pick the module install path, the module lands in the wrong `/usr/lib/modules/` directory. Inside the build, find the image's kernel with the documented pattern: `kver=$(cd /usr/lib/modules && echo *)`.
-- DKMS cannot run on the deployed host: `/usr/lib/modules` is read-only, and there is no runtime compilation. Compilation moves into the build.
+- Compilation moves into the image build. On the deployed host `/usr/lib/modules` is read-only, so a build step that would have run on the target, DKMS or anything else, has nowhere to put its result.
 - The kernel and bootloader are managed by bootc, not by RPM scriptlets. Your `%post` must not touch `/boot` or GRUB configs. Kernel arguments go through `kargs.d`: ship a TOML file at `/usr/lib/bootc/kargs.d/<name>.toml` in the image, for example `kargs = ["mydriver.option=1"]`, with an optional `match-architectures` key; see [kernel arguments](https://github.com/bootc-dev/bootc/blob/main/docs/src/building/kernel-arguments.md).
 - If your driver is needed before the root filesystem mounts (storage controllers), also include it in the initramfs: a dracut config file plus a rebuild against the explicit target kernel version.
 
-RHEL's documented flow is the default: a multi-stage Containerfile whose builder stage installs `make`, `gcc`, and `kernel-devel`, builds the driver RPM with `rpmbuild` against the image's own kernel, and whose final stage installs that RPM (`%post` runs `depmod`). If your packaging is already DKMS-based, the same layout works with DKMS in the builder stage. Note that `dkms` ships from EPEL, not RHEL's own repos: community-maintained, its own update cadence, outside RHEL support coverage. Some EPEL packages also need the CodeReady Builder repo enabled; `dkms` itself does not. If one of your build dependencies does, follow Red Hat's documentation for enabling CRB, since the repository id and the enablement path depend on how your build is entitled.
+RHEL's documented flow is the default: a multi-stage Containerfile whose builder stage installs `make`, `gcc`, and `kernel-devel`, builds the driver RPM with `rpmbuild` against the image's own kernel, and whose final stage installs that RPM (`%post` runs `depmod`). If you already ship a binary module RPM, that is still what you ship: it installs in the final stage the same way, as long as the module inside it was built against that image's kernel. If your packaging is already DKMS-based, the same layout works with DKMS in the builder stage, and the example below uses it because it has the most moving parts. Note that `dkms` ships from EPEL, not RHEL's own repos: community-maintained, its own update cadence, outside RHEL support coverage. Some EPEL packages also need the CodeReady Builder repo enabled; `dkms` itself does not. If one of your build dependencies does, follow Red Hat's documentation for enabling CRB, since the repository id and the enablement path depend on how your build is entitled.
 
 ```dockerfile
 FROM registry.redhat.io/rhel10/rhel-bootc:latest AS builder
@@ -178,9 +178,9 @@ RUN --mount=type=bind,from=builder,source=/var/lib/dkms/mydriver/1.0,target=/tmp
 
 One consistency note on the example: installing `epel-release` from a URL is trust on first use, the same pattern this guide's GPG guidance warns against. It is defensible here because it is EPEL's own documented bootstrap, it runs in a builder stage that is discarded, and only the compiled module crosses into the final image.
 
-One wall that does not move: Secure Boot module signing. Under Secure Boot signature enforcement, an unsigned out-of-tree module will not load, on image mode exactly as on traditional RHEL, and one signed with a key the machine doesn't trust is rejected the same way. The obligation carries over unchanged, whether you build with `rpmbuild` or DKMS. One mechanic does move. Signing has to happen in the build now, because that is where the module gets built, and a builder stage is a poor place to keep a key: anything generated there is discarded with the stage, so a module signed that way carries a signature no machine can verify. DKMS's signing support leans on a machine-local MOK that an admin enrolls once, and that arrangement does not survive the move into a container build. Either way nothing in the build reports a problem, and the failure surfaces at load time on a Secure Boot system. If your customers run Secure Boot, sign with your own key during the build (mount it as a build secret; see [Repos, credentials, and entitlements](#repos-credentials-and-entitlements)) and publish the certificate for them to enroll. Enrollment is a machine-level firmware action, so it belongs in their provisioning, not in your package.
+One wall that does not move: Secure Boot module signing. Under Secure Boot signature enforcement, an out-of-tree module that is unsigned, or signed with a key the machine doesn't trust, will not load, on image mode exactly as on traditional RHEL. The obligation is unchanged. What moves is where the signing happens: into the build, because that is where the module now gets built. That makes a builder stage a poor place to generate a key, since anything generated there is discarded along with the stage, and a module signed that way carries a signature no machine can verify. Nothing in the build reports a problem, and the failure surfaces at load time on a Secure Boot system. If your customers run Secure Boot, sign during the build with a key you control and mount it as a build secret; see [Repos, credentials, and entitlements](#repos-credentials-and-entitlements).
 
-**What to do:** Pre-build your module in a builder stage against the image's `kernel-devel`, with `rpmbuild`, `make`, or DKMS pinned via `-k`. Ship the built artifact in the final image. Never rely on DKMS on the deployed host.
+**What to do:** Build your module against the image's kernel, in a builder stage with `kernel-devel` pinned to that version, using whatever you build with today: `rpmbuild`, `make`, or DKMS with `-k`. Ship the built artifact in the final image, and leave no compile step for the deployed host.
 
 ### Repos, credentials, and entitlements
 
@@ -210,7 +210,9 @@ RUN bootc container lint
 
 It fails the build on a physical `/var/run` directory, warns on `/var` content without `tmpfiles.d` entries, and checks other image mode invariants. Cheap insurance.
 
-**What to do:** Put `RUN bootc container lint` at the end of the Containerfile snippet you ship, and recommend the step in your integration docs.
+The Containerfile belongs to whoever builds the image, so the line is theirs to run. It is worth running yourself too, when you test your add-on against a build: it catches what your package contributes while the build is still yours. Put the line in the Containerfile snippet you ship and the check is there from the customer's first build.
+
+**What to do:** Run `bootc container lint` on your own test builds, and put `RUN bootc container lint` at the end of the Containerfile snippet you ship.
 
 ## At first boot and deploy
 
@@ -387,4 +389,4 @@ Think of an image mode system like a phone or an appliance. The OS image is the 
 
 The image build (Containerfile) is where your RPM gets installed. The running system is where your app does its work, reading from the read-only image and writing to `/var` and `/etc`.
 
-If you follow one rule, follow this: **install files at build time, configure and run at boot time, write data to `/var`.**
+If you remember one thing, remember this: **your software goes in when the image is built, anything that depends on the real machine waits for first boot, and its data lives in `/var`.**
