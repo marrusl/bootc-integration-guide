@@ -19,3 +19,27 @@
     background-color: $body-background-color;
   }
 }
+
+// The sticky header above covers the top of whatever heading a link
+// jumps to, since the browser scrolls the target to y: 0 and the fixed
+// header then sits on top of it. This exists only because that rule
+// does: scroll-padding-top on the scroll container clears every jump in
+// the document (sidebar links, in-prose cross-references, the quick
+// reference table, search results, a pasted deep link) with one rule,
+// rather than a per-heading scroll-margin-top that needs maintaining as
+// headings are added.
+//
+// $header-height + $sp-5 ties the offset to the actual header height
+// instead of a literal, the same reasoning as $body-background-color
+// above; none of the theme's spacers lands exactly at the ~80px this
+// was verified against, so $sp-5 (1.5rem) is the closest available
+// breathing room on top of the header itself.
+//
+// Same mq(md) scope as the sticky rule: below that breakpoint
+// .main-header is display: none, not sticky, so there is nothing to
+// clear.
+html {
+  @include mq(md) {
+    scroll-padding-top: $header-height + $sp-5;
+  }
+}
