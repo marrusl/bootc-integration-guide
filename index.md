@@ -389,4 +389,4 @@ Think of an image mode system like a phone or an appliance. The OS image is the 
 
 The image build (Containerfile) is where your RPM gets installed. The running system is where your app does its work, reading from the read-only image and writing to `/var` and `/etc`.
 
-If you remember one thing, remember this: **your software goes in when the image is built, anything that depends on the real machine waits for first boot, and its data lives in `/var`.**
+If you remember one thing: **everything ships in the image, everything machine-specific waits for first boot, and machine state lives in `/var`.**
