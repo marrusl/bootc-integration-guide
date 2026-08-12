@@ -1,0 +1,35 @@
+# AI coding assistant directories
+# This repo gets worked on with several assistants; none of their local
+# state belongs in a public repo. .claude/ already exists in the working
+# tree holding only empty directories, so git has been ignoring it by
+# default so far — that stops being true the moment anything writes a
+# file into it.
+.claude/
+.cursor/
+.continue/
+.aider*
+.superpowers/
+
+# Jekyll build output
+# This is a GitHub Pages repo. GitHub's own build ignores these, but a
+# locally built _site/ committed by accident is a classic, noisy mistake
+# in a docs repo, especially with PRs open from outside contributors.
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.sass-cache/
+vendor/bundle/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
