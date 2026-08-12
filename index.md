@@ -3,7 +3,7 @@ layout: default
 title: "Getting Your App on RHEL Image Mode: What You Need to Know"
 ---
 
-If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and those customers are adopting RHEL image mode (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Two cases usually mean real refactoring rather than a Containerfile tweak: a kernel module, and an `/opt` tree that can't be restructured. Everything else is closer to a recipe. You don't need to become a bootc expert. You need to know where the walls are.
+If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting RHEL image mode (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Two cases usually mean real refactoring rather than a Containerfile tweak: a kernel module, and an `/opt` tree that can't be restructured. Everything else is closer to a recipe. You don't need to become a bootc expert. You need to know where the walls are.
 
 If your product is already container-native, you can skip most of this guide. Start with [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all) and stop there.
 
@@ -15,7 +15,7 @@ A handful of specifics are still being checked against a live system or a real b
 
 ## How image mode works
 
-On image mode, the operating system ships as a container image. The customer builds it with a Containerfile, the same way they build application containers, starting from a Red Hat base image. The running system boots from that image, and the OS content is read-only. Updates are atomic: the system pulls a newer image and switches to it on reboot, and it can roll back the same way. Your software becomes one layer of that image, installed during the customer's build.
+On image mode, the operating system ships as a container image. The customer builds it with a Containerfile, the same way they build application containers, starting from a Red Hat base image. The running system boots from that image, and the OS content is read-only. Updates are atomic: the system pulls a newer image and switches to it on reboot, and it can roll back the same way. Your software becomes one layer of that image, installed during that build.
 
 Where to go deeper:
 
@@ -42,7 +42,7 @@ That's the headline: **read-only root, read-write `/var` and `/etc`.** Your bina
 Before adapting your RPM, ask a more basic question: does your software need to be part of the OS image, or can it run as a container on top of it? Image mode systems run containers natively with Podman, and for agents, scanners, and monitoring tools, a container is often the simpler path. Two patterns:
 
 - **Quadlets.** Ship your agent as a container image plus a small systemd unit file (a Quadlet `.container` file). systemd starts it at boot like any service. You release container images on your own cadence, and the host filesystem rules below stop applying to your code.
-- **Logically bound images.** The customer's OS image references your container image, so it is pulled and lifecycled together with the host image while still updating on its own cadence. Upstream's stated use cases are logging, monitoring, configuration management, and security agents: exactly the software this guide is written for. See [logically bound images](https://github.com/bootc-dev/bootc/blob/main/docs/src/logically-bound-images.md).
+- **Logically bound images.** The OS image references your container image, so it is pulled and lifecycled together with the host image while still updating on its own cadence. Upstream's stated use cases are logging, monitoring, configuration management, and security agents: exactly the software this guide is written for. See [logically bound images](https://github.com/bootc-dev/bootc/blob/main/docs/src/logically-bound-images.md).
 
 If your software can run as a container, most of this guide stops applying to you. The catalog below is for software that has to live on the host: drivers and kernel modules, host-level tooling, or anything that genuinely can't be containerized.
 
@@ -54,7 +54,7 @@ The patterns in this guide, in one table. Each row links to the section with the
 |---------|---------------------|--------------------|---------|
 | Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
 | `curl \| bash` installer at deploy time | No, but it works as a build step | Run it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
-| RPM installed by admin post-deployment | No | Include in the customer's Containerfile | [Installation](#software-installs-at-build-time-not-at-runtime) |
+| RPM installed by admin post-deployment | No | Include it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
 | `%post` runs `systemctl start` | No | Use `enable` only; start happens at boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
 | Scriptlet guards `systemctl` behind a `/run/systemd/system` check | Silently skipped: build passes, image has no service | Drop the guard; `enable` works in builds | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
 | `%post` prompts for input (license key, EULA) | No, builds have no TTY and no open stdin | Config file in `/etc`, or first boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
@@ -81,7 +81,7 @@ The patterns in this guide, in one table. Each row links to the section with the
 
 ## At image build time
 
-Everything in this group happens inside the customer's Containerfile build, before any machine boots.
+Everything in this group happens inside the image build, before any machine boots.
 
 ### Software installs at build time, not at runtime
 
@@ -94,7 +94,7 @@ RUN dnf install -y your-package && dnf clean all
 
 The wall is *when*, not *how*. RPM packaging is not a requirement: the build can run your install script (`RUN ./install.sh`), `COPY` in unpackaged content, or unpack a tarball, and the result ships in the image like anything else. Whatever your installer does, it runs under the build-environment caveats in the next section (no systemd, no hardware, no booted kernel).
 
-What fails is installation on a running system. `dnf` is present, but installs fail against the read-only `/usr`. The same `curl | bash` script that works as a `RUN` step in the build fails with a read-only filesystem error after deployment, and so does an RPM an admin tries to install post-deploy. Your software needs to go in during the customer's image build, whatever format it arrives in. (There is one transient exception for debugging; see [Debugging](#debugging-on-a-running-system).)
+What fails is installation on a running system. `dnf` is present, but installs fail against the read-only `/usr`. The same `curl | bash` script that works as a `RUN` step in the build fails with a read-only filesystem error after deployment, and so does an RPM an admin tries to install post-deploy. Your software needs to go in during the image build, whatever format it arrives in. (There is one transient exception for debugging; see [Debugging](#debugging-on-a-running-system).)
 
 **What to do:** Provide customers with a Containerfile snippet they can add to their image build: a documented `RUN dnf install` line, or a `RUN ./install.sh` with any build-unsafe steps removed. This is the image mode equivalent of "add our repo and install our RPM."
 
@@ -109,7 +109,7 @@ When `dnf install` runs in a Containerfile, it runs inside a container build. Th
 
 If your RPM's `%post` scriptlets restart services, probe hardware, load kernel modules, or contact a license server, they will fail or do the wrong thing during the container build.
 
-First, the good news: `systemctl enable` works during container builds. It just creates symlinks, no running systemd needed, and it is the supported way to enable your service. Both upstream bootc and RHEL docs use `RUN systemctl enable ...` in Containerfiles. The same goes for `disable`, `preset`, and `mask`. Enablement also has two owners: your package states a default (a preset file, or `systemctl enable` via the standard scriptlet macros), and the customer's Containerfile can override it either way with `RUN systemctl enable` or `RUN systemctl disable`.
+First, the good news: `systemctl enable` works during container builds. It just creates symlinks, no running systemd needed, and it is the supported way to enable your service. Both upstream bootc and RHEL docs use `RUN systemctl enable ...` in Containerfiles. The same goes for `disable`, `preset`, and `mask`. Enablement also has two owners: your package states a default (a preset file, or `systemctl enable` via the standard scriptlet macros), and the image build can override it either way with `RUN systemctl enable` or `RUN systemctl disable`.
 
 Anything that talks to a *running* systemd fails: `start`, `stop`, `restart`, `daemon-reload`, `is-active`. So do these common scriptlet moves:
 
@@ -184,13 +184,13 @@ One wall that does not move: Secure Boot module signing. Under Secure Boot signa
 
 ### Repos, credentials, and entitlements
 
-When your customer adds your RPM repository to their Containerfile, the `.repo` file and any credentials in it become part of the image layers. Anyone who can pull the image can read every file in it: pulling and unpacking the layers with standard tools (`skopeo copy`, `podman save`, or simply running the image) exposes embedded credentials. Build args and environment variables are even easier to read: they show up in the image history via `podman inspect`.
+When your RPM repository goes into a Containerfile, the `.repo` file and any credentials in it become part of the image layers. Anyone who can pull the image can read every file in it: pulling and unpacking the layers with standard tools (`skopeo copy`, `podman save`, or simply running the image) exposes embedded credentials. Build args and environment variables are even easier to read: they show up in the image history via `podman inspect`.
 
 Build secrets exist for this. `--mount=type=secret` in the Containerfile makes a credential available during the build without landing it in a layer. The mount protects only what stays in it: a credential copied into `/etc/yum.repos.d/`, a config file, or a cache directory persists in a layer just as surely as `COPY` would, and build logs persist too, so an `echo`, a verbose flag, or a failing command can write the value into them. Read the secret directly from `/run/secrets/<id>` and keep it out of anything that outlives the build. All of this is about build-time credentials like repo access; a secret that must exist on the deployed host (a pull secret for bound container images, for example) is a different case, and RHEL's own docs deliberately persist it in the image.
 
 GPG keys are public, but public is not the same as trusted. Your key is the trust anchor: every RPM in the build is accepted because that key vouches for it. Don't have customers fetch it from a URL at build time. Whatever the server returns that day becomes the root of trust, and a compromised host can supply both the packages and the key that validates them.
 
-Instead, ship the key as a file in your integration materials. The customer vendors it into their build context, copies it into the image at `/etc/pki/rpm-gpg/`, and references it with `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-yourvendor` in the `.repo` file (or runs `rpm --import` on that same path). Publish the key's fingerprint through a separate channel so customers can verify what they vendored. File-based keys also keep working in air-gapped builds, which is why RHEL's own offline guidance recommends the same pattern.
+Instead, ship the key as a file in your integration materials. The customer vendors it into their build context, copies it into the image at `/etc/pki/rpm-gpg/`, and references it with `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-yourvendor` in the `.repo` file (or runs `rpm --import` on that same path). Publish the key's fingerprint through a separate channel so they can verify what they vendored. File-based keys also keep working in air-gapped builds, which is why RHEL's own offline guidance recommends the same pattern.
 
 RHEL entitlements in CI are the same mechanism: mounting subscription certificates as build secrets is a legitimate, documented pattern, and baking them into image layers is the anti-pattern. Whether your subscription terms cover a given CI setup and build volume is a question for your Red Hat agreement, not this guide.
 
@@ -202,7 +202,7 @@ RHEL entitlements in CI are the same mechanism: mounting subscription certificat
 
 ### Run `bootc container lint` in the build
 
-One line at the end of the customer's Containerfile catches several of the mistakes in this guide automatically:
+One line at the end of the Containerfile catches several of the mistakes in this guide automatically:
 
 ```dockerfile
 RUN bootc container lint
@@ -222,7 +222,7 @@ Move the machine-specific work here, where the real hardware, network, and ident
 
 What belongs where:
 
-- **Build time (your RPM, the customer's Containerfile):** install files, ship default configs, enable the service.
+- **Build time (your RPM, the image build):** install files, ship default configs, enable the service.
 - **First boot (this service):** hardware discovery, network and identity, license registration and activation, anything that writes machine-specific state into `/etc` or `/var`.
 
 The canonical unit:
@@ -292,7 +292,7 @@ A flat `/opt/myvendor/` that contains all of these will not work as-is.
 
 The standard fix is to separate the writable content, and the two patterns are owned by different people.
 
-Customer-side, in the Containerfile: move writable directories to `/var` and create symlinks back. Ship this snippet in your integration docs:
+In the image build: move writable directories to `/var` and create symlinks back. Ship this snippet in your integration docs:
 
 ```dockerfile
 RUN dnf install -y myvendor-agent && \
@@ -302,7 +302,7 @@ RUN dnf install -y myvendor-agent && \
     ln -sr /var/lib/myvendor /opt/myvendor/data
 ```
 
-Vendor-side, in the systemd unit your package ships: `BindPaths=` mounts writable directories into the read-only tree at service start, with no change to the installed file layout:
+In your own package: `BindPaths=` in the systemd unit you ship mounts writable directories into the read-only tree at service start, with no change to the installed file layout:
 
 ```ini
 [Service]
@@ -336,12 +336,12 @@ On traditional RHEL, troubleshooting starts with something like `dnf install str
 
 For more than a quick session:
 
-- Maintain a debug variant of the customer's image with the tools pre-installed. A machine moves to it with `bootc switch` and back again when the session ends; each switch takes effect at a reboot.
+- Maintain a debug variant of the image with the tools pre-installed. A machine moves to it with `bootc switch` and back again when the session ends; each switch takes effect at a reboot.
 - Run tools from a privileged container: `podman run --pid=host --network=host --privileged -it registry.redhat.io/rhel10/support-tools`
 
 **What to do:** Include an image mode section in your troubleshooting docs. List the debug tools your support team needs so customers can bake them into their image builds proactively, and teach your support staff `bootc usr-overlay` for live sessions.
 
-One expectation to reset in your support organization: on image mode, your software reaches the running system through the customer's image build pipeline, and that pipeline is now part of the triage path. "Which build produced this system" is a first-class question. Ask for the Containerfile along with the usual logs.
+One expectation to reset in your support organization: on image mode, your software reaches the running system through the image build pipeline, and that pipeline is now part of the triage path. "Which build produced this system" is a first-class question. Ask for the Containerfile along with the usual logs.
 
 ### Configuration management works differently
 
@@ -359,7 +359,7 @@ On traditional RHEL, vendor default configs and customer customizations both liv
 
 | What | Where | Why |
 |------|-------|-----|
-| **Your vendor defaults** | `/usr/share/<package>/` or `/usr/lib/<package>/` | Ships with the image, read-only, updated when the customer rebuilds |
+| **Your vendor defaults** | `/usr/share/<package>/` or `/usr/lib/<package>/` | Ships with the image, read-only, updated when the image is rebuilt |
 | **Customer customization** | `/etc/<package>/` or `/etc/<package>.conf` | Persistent, survives upgrades, customer-controlled |
 
 **Why this matters:** On image mode, `/etc` uses a 3-way merge on upgrades. The merge happens on the machine when the new deployment is created (during `bootc upgrade` or `bootc switch`), not during the image build, and it operates per file: a locally modified file is kept wholesale. There is no line-level merging and there are no conflict markers. If the customer has modified a file in `/etc`, their version wins, and your updated default will **not** be applied. Metadata changes count too: a `chown` or a permissions change on a config file pins it locally the same as an edit. If your defaults and the customer's customizations are in the same file, you have a problem.
@@ -370,11 +370,11 @@ On traditional RHEL, vendor default configs and customer customizations both liv
 
 `sysusers.d` has one wrinkle of its own: by default it allocates UIDs per machine, so the same user can hold different UIDs across a fleet, which matters as soon as you `chown` persistent data in `/var`. The fix is the static allocation upstream recommends whenever persistent data is involved: pin the UID and GID in your entry (`u myuser 900:900 "My vendor service"`), and ownership stays stable across machines and rebuilds. The cost is a collision risk if something else claims the same number.
 
-Also worth knowing: bootc supports a transient `/etc` (`transient = true` under `[etc]` in `/usr/lib/ostree/prepare-root.conf`, set in the image at build time), rebuilt from the image on every boot. A customer who enables it gives up persistent local `/etc` changes entirely. If your software writes config to `/etc` at runtime, know that this deployment variant exists.
+Also worth knowing: bootc supports a transient `/etc` (`transient = true` under `[etc]` in `/usr/lib/ostree/prepare-root.conf`, set in the image at build time), rebuilt from the image on every boot. A system with it enabled gives up persistent local `/etc` changes entirely. If your software writes config to `/etc` at runtime, know that this deployment variant exists.
 
 ### Rollbacks: `/etc` reverts, `/var` does not
 
-Customers can roll back to the previous OS image with `bootc rollback`. The two writable areas behave differently when they do:
+A system can be rolled back to the previous OS image with `bootc rollback`. The two writable areas behave differently when that happens:
 
 - **`/etc` reverts** to the prior deployment's state. Rollback reorders existing deployments, and each keeps its own `/etc`.
 - **`/var` carries forward** unchanged. Your runtime data may now be "ahead" of both the OS and your config.
@@ -385,6 +385,6 @@ Customers can roll back to the previous OS image with `bootc rollback`. The two 
 
 Think of an image mode system like a phone or an appliance. The OS image is the firmware: it ships complete and read-only. Your app is part of that firmware, installed at build time, and its runtime data lives in a separate writable area (`/var`).
 
-The customer's image build (Containerfile) is where your RPM gets installed. The running system is where your app does its work, reading from the read-only image and writing to `/var` and `/etc`.
+The image build (Containerfile) is where your RPM gets installed. The running system is where your app does its work, reading from the read-only image and writing to `/var` and `/etc`.
 
 If you follow one rule, follow this: **install files at build time, configure and run at boot time, write data to `/var`.**
