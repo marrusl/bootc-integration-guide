@@ -1,0 +1,21 @@
+// just-the-docs ships .main-header (the search bar) as position: static, so
+// it scrolls away with the page content. On a single long page, the search
+// bar is the fastest way back to any gotcha, so keep it pinned instead.
+//
+// Scoped to the theme's own `md` breakpoint (@include mq(md), the point
+// where .main-header switches from display: none to display: flex) so this
+// doesn't touch the small-screen layout, where .main-header instead
+// participates in the mobile nav-open toggle.
+//
+// $body-background-color is the theme's own light-scheme background
+// variable; an explicit background is required because .main computes to
+// a transparent background, and without one, content would show through
+// the header as it scrolls underneath.
+.main-header {
+  @include mq(md) {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background-color: $body-background-color;
+  }
+}
