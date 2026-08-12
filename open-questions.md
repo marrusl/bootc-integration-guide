@@ -22,6 +22,16 @@ There's no SELinux section in this guide. That's deliberate rather than an omiss
 
 **What would settle it:** boot an image, compare the label state against what the shipped policy expects (`matchpathcon`, `ls -Z`), and check whether a local relabel survives the next deployment or gets overwritten. That's enough for a short section.
 
+### Whether `BindPaths=` into a read-only `/opt` starts cleanly
+
+The `/opt` section offers `BindPaths=` in a shipped systemd unit as a way to get a writable directory into the read-only tree. The mechanism is documented: upstream bootc's build guidance and RHEL's image mode documentation both carry the same example line, and systemd's own documentation settles the semantics, including that the unit gets its own mount namespace and that the bind mount is writable unless the source mount is read-only. What none of those sources shows is the pattern running on a deployed system. Three things about it are reasoned rather than observed:
+
+- Whether the bind mount succeeds at all when the destination sits on the composefs-backed read-only `/opt`. Mounting over an existing directory shouldn't need the underlying filesystem to be writable, and the directory is there because the package created it at build time, but that's an inference.
+- What SELinux does with it. The source directory carries its own labels (`/var/log/...` is `var_log_t`), and a confined service reaching that content through an `/opt` path may be denied where it would have been allowed at the original path.
+- Whether the source directory exists at all on a system that's already been deployed. Image content in `/var` lands only on the first deployment, so a unit shipping nothing but the two `BindPaths=` lines has no guarantee its sources are present, and a missing source fails the unit at namespace setup unless the definition is prefixed with `-`. A `tmpfiles.d` entry or `StateDirectory=` is the fix, and the `/opt` section doesn't currently say so.
+
+**What would settle it:** on a booted system, `systemd-run -p BindPaths=/var/log/example:/opt/example/logs --pty /bin/bash`, then `findmnt /opt/example/logs` inside that shell and a write into it with SELinux enforcing, checking `ausearch -m avc -ts recent` afterward. That covers all three in one pass.
+
 ## If you have an entitled RHEL build host
 
 ### The kernel-module build example
@@ -44,6 +54,16 @@ The guide's kernel-module section notes that some EPEL packages need the CodeRea
 **What would settle it:** on an entitled RHEL 10 system, `dnf repoquery --requires --resolve dkms` against your own repositories, not a Stream mirror. A successful build of the kernel-module example above settles it in passing too, since that build installs `dkms` with CRB disabled.
 
 ## Calls we haven't made yet
+
+### Should `BindPaths=` be a recommendation, or an option we only describe?
+
+The `/opt` section currently recommends it: the "What to do" line tells vendors to ship `BindPaths=` in their own unit when only their service writes to the path. The pattern is established, not invented here. Upstream bootc's build guidance and RHEL's image mode documentation both offer it as an alternative to the symlink pattern, and both stop at the example line. The scope caveat this guide adds after it, that the remap exists only inside that unit's mount namespace, appears in neither.
+
+That caveat is what makes this a judgment call rather than a fact question. A reader who skims past it comes away thinking the path is writable. What they actually get is one path telling two different stories: the service writes successfully, while an admin running `ls` on the same path sees stale image content and concludes logging is broken, a log shipper aimed there collects nothing, and a helper CLI writing there fails read-only. In all three cases the data was fine and the path lied. The symlink pattern has no such split, which is why this guide leads with it and why upstream does too.
+
+There's a wording question underneath. The caveat names the mechanism, then describes the consequence entirely from the outside, in terms of what other processes see. At least one careful reader came away wondering whether the mount namespace walls the service off from the rest of the filesystem. It doesn't: the service sees everything normally, and what it writes lands in the real `/var/log/<vendor>`, reachable by the whole host. Only the path alias is local to the unit.
+
+**What would settle it:** two calls, in an issue or a pull request. Whether the "What to do" line keeps recommending `BindPaths=` or steps back to describing it as an option, and whether the caveat should lead with the reassuring half, that the service sees the whole filesystem and the data is in the real location, before naming what other processes see.
 
 ### Should transient root get a mention alongside state overlays?
 
