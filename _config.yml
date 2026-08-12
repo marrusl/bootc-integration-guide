@@ -2,4 +2,23 @@ title: Getting Your App on RHEL Image Mode
 description: >-
   A practical guide for partner integration engineers adapting host RPM
   software for RHEL image mode (bootc).
-theme: minima
+
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+plugins:
+  - jekyll-remote-theme
+
+color_scheme: light
+search_enabled: true
+search:
+  heading_level: 3
+  previews: 3
+  tokenizer_separator: /[\s/]+/
+heading_anchors: true
+back_to_top: true
+back_to_top_text: "Back to top"
+
+gh_edit_link: true
+gh_edit_link_text: "Suggest a change to this page"
+gh_edit_repository: https://github.com/marrusl/bootc-integration-guide
+gh_edit_branch: main
+gh_edit_view_mode: edit

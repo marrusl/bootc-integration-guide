@@ -1,0 +1,45 @@
+{%- comment -%}
+  Overrides components/site_nav.html: that file builds the nav from page
+  front matter, which is empty on this single-page site. This walks the
+  rendered h2/h3 headings and builds an "on this page" nav instead.
+{%- endcomment -%}
+<nav aria-label="On this page" id="site-nav" class="site-nav">
+  <ul class="nav-list" id="page-toc-list"></ul>
+</nav>
+<script>
+(function () {
+  var root = document.getElementById('page-toc-list');
+  var headings = document.querySelectorAll('.main-content h2, .main-content h3');
+  var items = [];
+  var currentSub = root;
+  headings.forEach(function (h) {
+    if (!h.id) return;
+    var a = document.createElement('a');
+    a.className = 'nav-list-link';
+    a.href = '#' + h.id;
+    a.textContent = h.textContent.trim();
+    var li = document.createElement('li');
+    li.className = 'nav-list-item';
+    li.appendChild(a);
+    if (h.tagName === 'H2') {
+      root.appendChild(li);
+      currentSub = li.appendChild(document.createElement('ul'));
+      currentSub.className = 'nav-list';
+    } else {
+      currentSub.appendChild(li);
+    }
+    items.push({ heading: h, link: a });
+  });
+  if (!('IntersectionObserver' in window) || !items.length) return;
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      var current = items.find(function (i) { return i.heading === entry.target; });
+      if (!current) return;
+      items.forEach(function (i) { i.link.removeAttribute('aria-current'); });
+      current.link.setAttribute('aria-current', 'true');
+    });
+  }, { rootMargin: '0px 0px -70% 0px' });
+  items.forEach(function (i) { observer.observe(i.heading); });
+})();
+</script>
