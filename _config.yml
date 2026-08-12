@@ -22,3 +22,9 @@ gh_edit_link_text: "Suggest a change to this page"
 gh_edit_repository: https://github.com/marrusl/bootc-integration-guide
 gh_edit_branch: main
 gh_edit_view_mode: edit
+
+# aux_nav.html reads these values raw, with no relative_url filter, so the
+# internal link is spelled out in full rather than site-root-relative.
+aux_links:
+  "Open questions":
+    - "https://marrusl.github.io/bootc-integration-guide/open-questions/"

@@ -13,6 +13,8 @@ Three things this guide is not. It isn't an effort estimate. Some fixes are one 
 
 **Version 0.6, written against RHEL 10 image mode and bootc as of 2026-08-11.**
 
+A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
+
 ## How image mode works
 
 On image mode, the operating system ships as a container image. The customer builds it with a Containerfile, the same way they build application containers, starting from a Red Hat base image. The running system boots from that image, and the OS content is read-only. Updates are atomic: the system pulls a newer image and switches to it on reboot, and it can roll back the same way. Your software becomes one layer of that image, installed during the customer's build.

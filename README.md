@@ -16,6 +16,8 @@ Upstream bootc docs are written for the people who build OS images. RHEL docs ar
 
 **Pre-1.0 working draft.** It's public because it's useful now, not because it's finished. Expect gaps, and expect it to keep changing as bootc and RHEL image mode do.
 
+The guide's core model is verified against upstream bootc and RHEL documentation. A short list of narrower specifics, ones that need a booted system, a real build, or a source we couldn't fully reach, are tracked on the [open questions](https://marrusl.github.io/bootc-integration-guide/open-questions/) page. If you can settle one, that's a welcome pull request or issue.
+
 ## Contributing
 
 Found something wrong, outdated, or missing? Open an issue or a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions this guide follows.
