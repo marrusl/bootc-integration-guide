@@ -6,40 +6,60 @@
 <nav aria-label="On this page" id="site-nav" class="site-nav">
   <ul class="nav-list" id="page-toc-list"></ul>
 </nav>
+<style>
+  /* just-the-docs hides nested .nav-list elements except on the active
+     multi-page branch, a concept that doesn't apply to this single-page
+     nav. Scoped to this list so nothing else on the site is affected. */
+  #page-toc-list ul.nav-list { display: block; }
+</style>
 <script>
 (function () {
-  var root = document.getElementById('page-toc-list');
-  var headings = document.querySelectorAll('.main-content h2, .main-content h3');
-  var items = [];
-  var currentSub = root;
-  headings.forEach(function (h) {
-    if (!h.id) return;
-    var a = document.createElement('a');
-    a.className = 'nav-list-link';
-    a.href = '#' + h.id;
-    a.textContent = h.textContent.trim();
-    var li = document.createElement('li');
-    li.className = 'nav-list-item';
-    li.appendChild(a);
-    if (h.tagName === 'H2') {
-      root.appendChild(li);
-      currentSub = li.appendChild(document.createElement('ul'));
-      currentSub.className = 'nav-list';
-    } else {
-      currentSub.appendChild(li);
-    }
-    items.push({ heading: h, link: a });
-  });
-  if (!('IntersectionObserver' in window) || !items.length) return;
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (!entry.isIntersecting) return;
-      var current = items.find(function (i) { return i.heading === entry.target; });
-      if (!current) return;
-      items.forEach(function (i) { i.link.removeAttribute('aria-current'); });
-      current.link.setAttribute('aria-current', 'true');
+  function build() {
+    var root = document.getElementById('page-toc-list');
+    var headings = document.querySelectorAll('.main-content h2, .main-content h3');
+    var items = [];
+    var currentLi = null;
+    headings.forEach(function (h) {
+      if (!h.id) return;
+      var a = document.createElement('a');
+      a.className = 'nav-list-link';
+      a.href = '#' + h.id;
+      a.textContent = h.textContent.trim();
+      var li = document.createElement('li');
+      li.className = 'nav-list-item';
+      li.appendChild(a);
+      if (h.tagName === 'H2') {
+        root.appendChild(li);
+        currentLi = li;
+      } else if (currentLi) {
+        var sub = currentLi.querySelector('ul.nav-list');
+        if (!sub) {
+          sub = document.createElement('ul');
+          sub.className = 'nav-list';
+          currentLi.appendChild(sub);
+        }
+        sub.appendChild(li);
+      } else {
+        root.appendChild(li);
+      }
+      items.push({ heading: h, link: a });
     });
-  }, { rootMargin: '0px 0px -70% 0px' });
-  items.forEach(function (i) { observer.observe(i.heading); });
+    if (!('IntersectionObserver' in window) || !items.length) return;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var current = items.find(function (i) { return i.heading === entry.target; });
+        if (!current) return;
+        items.forEach(function (i) { i.link.removeAttribute('aria-current'); });
+        current.link.setAttribute('aria-current', 'true');
+      });
+    }, { rootMargin: '0px 0px -70% 0px' });
+    items.forEach(function (i) { observer.observe(i.heading); });
+  }
+  if (document.readyState !== 'loading') {
+    build();
+  } else {
+    document.addEventListener('DOMContentLoaded', build);
+  }
 })();
 </script>
