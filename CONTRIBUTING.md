@@ -16,15 +16,6 @@ This guide gets read as authoritative, so every technical claim needs to trace b
 
 If you hit a wall the guide doesn't cover and you're not sure it belongs, open an issue and describe what you found. Someone can help place it.
 
-## Voice
-
-This guide follows a consistent voice. Please match it:
-
-- No em dashes. Use commas, colons, or separate sentences instead.
-- Don't use the word "shape." Say "layout," "structure," "pattern," or name the thing directly.
-- Don't use the word "immutable." Say "image-based" for the deployment model, or "read-only" for filesystem state.
-- Direct and simple. No marketing language.
-
 ## Making a change
 
 1. Open a pull request against `main`, or open an issue if you'd rather flag something than write the fix yourself.
