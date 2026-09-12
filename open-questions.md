@@ -16,20 +16,11 @@ There's no SELinux section in this guide. That's deliberate rather than an omiss
 
 **What would settle it:** boot an image, compare the label state against what the shipped policy expects (`matchpathcon`, `ls -Z`), and check whether a local relabel survives the next deployment or gets overwritten. That's enough for a short section.
 
-### Whether `BindPaths=` into a read-only `/opt` starts cleanly
+### Whether a confined service can write through the `/opt` symlink
 
-The `/opt` section describes `BindPaths=` in a shipped systemd unit as a way to get a writable directory into the read-only tree. The mechanism is documented: upstream bootc's build guidance and RHEL's image mode documentation both carry the same example line, and systemd's own documentation settles the semantics, including that the unit gets its own mount namespace and that the bind mount is writable unless the source mount is read-only. What none of those sources shows is the pattern running on a deployed system. Two things about it are reasoned rather than observed:
+The `/opt` section tells you to move writable directories into `/var` and symlink them back. The content then carries the label of its new home (`/var/log/...` is `var_log_t`), not whatever label the package's `/opt` tree had. A confined service reaching that content through its old `/opt` path may be denied where it would have been allowed at the original path. Upstream flags the same class of risk for the analogous pattern of symlinking a config file from `/etc` into `/usr`. The `/opt` section currently gives the fix without this caveat, because we don't know whether it bites in practice or only in principle.
 
-- Whether the bind mount succeeds at all when the destination sits on the composefs-backed read-only `/opt`. Mounting over an existing directory shouldn't need the underlying filesystem to be writable, and the directory is there because the package created it at build time, but that's an inference.
-- What SELinux does with it. The source directory carries its own labels (`/var/log/...` is `var_log_t`), and a confined service reaching that content through an `/opt` path may be denied where it would have been allowed at the original path.
-
-**What would settle it:** on a booted system, `systemd-run -p BindPaths=/var/log/example:/opt/example/logs --pty /bin/bash`, then `findmnt /opt/example/logs` inside that shell and a write into it with SELinux enforcing, checking `ausearch -m avc -ts recent` afterward. That covers both in one pass.
-
-### Whether security tooling sees through a `BindPaths=` alias
-
-This is part of why the `/opt` section describes `BindPaths=` without recommending it. Under the symlink pattern the path stays self-describing: `/opt/<vendor>/logs` is a symlink, visible as one to anything that stats it, and a tool that resolves symlinks reaches the real content. Under `BindPaths=` a tool walking the filesystem from outside the service's namespace sees an ordinary directory holding whatever the image shipped, with nothing to indicate another view exists. A root-level agent can still get the truth, through `/proc/<pid>/mountinfo`, `/proc/<pid>/root/`, or `nsenter -t <pid> -m`, but only if it knows to look at that PID. So the risk lands on file integrity monitoring, log collection, and compliance scans that work from a configured list of paths rather than from a running process. Whether the tools your customers actually run work that way isn't something this guide can answer.
-
-**What would settle it:** a report from the field. If you've run file integrity monitoring or a compliance scanner against a bootc host with a `BindPaths=` unit on it, we'd like to know whether the tool saw the aliased path or the image content sitting behind it.
+**What would settle it:** on a booted system with SELinux enforcing, apply the symlink pattern to a confined service, write through the `/opt` path, and check `ausearch -m avc -ts recent`. If a policy adjustment turns out to be needed, that's a sentence the `/opt` section is missing.
 
 ## If you have an entitled RHEL build host
 
