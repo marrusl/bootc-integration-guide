@@ -3,7 +3,7 @@ layout: default
 title: "Getting Your App on RHEL Image Mode: What You Need to Know"
 ---
 
-If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting RHEL image mode (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Two cases usually mean real refactoring rather than a Containerfile tweak: a kernel module, and an `/opt` tree that can't be restructured. Everything else is closer to a recipe. You don't need to become a bootc expert. You need to know where the walls are.
+If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting RHEL image mode (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Most of those fixes live in the image build your customer already runs, and a smaller set needs a change only you can make. [How much work is this?](#how-much-work-is-this) sorts them, so you can tell early which one you are behind. You don't need to become a bootc expert. You need to know where the walls are.
 
 If your product is already container-native, you can skip most of this guide. Start with [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all) and stop there.
 
@@ -46,6 +46,32 @@ Before adapting your RPM, ask a more basic question: does your software need to 
 - **Logically bound images.** The OS image references your container image, so it is pulled and lifecycled together with the host image while still updating on its own cadence. Upstream's stated use cases are logging, monitoring, configuration management, and security agents: exactly the software this guide is written for. See [logically bound images](https://github.com/bootc-dev/bootc/blob/main/docs/src/logically-bound-images.md).
 
 If your software can run as a container, most of this guide stops applying to you. The catalog below is for software that has to live on the host: drivers and kernel modules, host-level tooling, or anything that genuinely can't be containerized.
+
+## How much work is this?
+
+The patterns in this guide are not equally expensive, and the difference that matters most is not how technical the fix is. It is whether your customer can do it themselves, in their own image build, with what you ship today.
+
+**Bucket 0: it does not need to be in the OS image.** If your software can run as a container, the host filesystem rules stop applying to it and most of this guide stops applying to you. That is [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all), and it is worth answering before any of the rest.
+
+**Bucket 1: it installs and runs unchanged.** A `.repo` file, your GPG key, a `RUN dnf install` or `RUN ./install.sh`, and you are done: plain files, nothing about your software changes. Most software lands here. Confirm it rather than assume it: run `bootc container lint` against a test build and read your scriptlets with `rpm -qp --scripts`. The silent failure in [the build environment](#the-build-environment-is-a-container-not-a-booted-system) leaves your service unenabled without failing the build: a green build is not by itself evidence.
+
+**Bucket 2: the build needs one more step.** Your software is fine, but the build has to be adjusted. The common case is an `/opt` tree mixing read-only content with directories your software writes to: logs, caches, a definitions database. Move those to `/var`, symlink them back, and ship `tmpfiles.d` entries so the targets exist on every machine, not only newly provisioned ones. See [`/opt`](#opt-is-read-only-at-runtime). Repo credentials and entitlements land here too: they need [`--mount=type=secret`](#repos-credentials-and-entitlements) to stay out of the layers. Either way the customer's Containerfile carries the change and your source does not.
+
+**Bucket 3: the build has to target the deployed system, not the build host.** What the build needs is there, your tooling just reads the build host instead of the image: anything that inspects the running system gets the wrong answer. Kernel modules are the worked case. The module has to be built against the kernel in the image, so the build gains a builder stage with `kernel-devel` pinned to that kernel version: see [Kernel modules](#kernel-modules-build-against-the-images-kernel). If you already ship a prebuilt module RPM, it installs in the final stage unchanged, against a kernel it was built for or one that is kABI-compatible with it.
+
+**Bucket 4: what the build needs is not there at all.** There is no hardware, no running systemd, no D-Bus, nothing to re-point the build at, so an installer that probes the machine, contacts a license server, or asks a question cannot get a real answer during the build.
+
+Three things to try before concluding you are here. Look for a flag that skips the probe or runs the installer non-interactively: many vendor installers have one, and one more argument in the `RUN` line puts you in bucket 2. If the value being derived is the same on every machine, it is a static file you can ship. And test, rather than assume, whether the software re-derives it at startup and repairs itself anyway: the build goes green either way. Failing all three, the work moves to a oneshot service gated on a stamp file in `/var`: see [first boot](#do-machine-specific-setup-at-first-boot).
+
+| Bucket | What it looks like | Where the fix lives | Customer can self-serve |
+|--------|--------------------|---------------------|-------------------------|
+| **0** | Runs as a container instead of inside the OS image | Your release process, once | Yes |
+| **1** | Installs unchanged with `RUN dnf install` or your install script | One line in the Containerfile | Yes |
+| **2** | Works after an adjustment in the build: writable `/opt` paths symlinked to `/var`, `tmpfiles.d` entries, credentials as build secrets | The image build | Yes |
+| **3** | Inspects the build host where it should inspect the image: a module built against the wrong kernel | The image build, with a builder stage | Yes |
+| **4** | Needs hardware, a running service, or an answer the build cannot supply; or writes where nothing can redirect it | The deployed machine, or your next release | Sometimes: check for a skip flag and for self-repair on boot first, and if neither applies it is yours to fix |
+
+One thing the buckets do not settle: whether the path is documented. That is a separate axis from effort, and it is the one a customer can see from the outside. A note is worth writing at every bucket, including the easiest, where "installs with `dnf install`, supported on RHEL image mode" is the whole of it. It is the difference between a path you stand behind and one a customer found to work.
 
 ## Quick reference
 
