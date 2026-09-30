@@ -115,7 +115,7 @@ The Linux default is also temporary. `${XDG_RUNTIME_DIR}` is a tmpfs that goes a
 $ podman login --authfile ~/.config/containers/auth.json registry.redhat.io
 ```
 
-That path is the second stop in the documented search order, so `podman build`, `buildah`, and `skopeo` find it without being told. The file holds the credential base64-encoded, not encrypted, which is fine on a workstation and one more reason to keep personal logins off shared machines.
+That path is the second stop in the documented search order, so `podman build`, `buildah`, and `skopeo` find it without being told. Know what is now on disk: the file holds your username and password base64-encoded, which anyone who can read the file can decode, so only the file's permissions protect it. `podman login` writes it mode 0600 in a directory it creates mode 0700, so there is nothing to set and nothing to loosen. On a workstation that is fine. On a shared machine it is one more reason for the next paragraph, because a personal login here is your Customer Portal password, not a registry token.
 
 On macOS and Windows, the Red Hat Authentication extension for [Podman Desktop](https://podman-desktop.io/), upstream or the Red Hat build, does this step for you: sign in with your Red Hat account and it logs the Podman machine in to `registry.redhat.io`. It also registers that machine with your developer subscription, which is the next credential.
 
