@@ -161,6 +161,7 @@ The first tells you which RHEL you actually pulled, which matters when `latest` 
 - On macOS and Windows, sign in through the Red Hat Authentication extension for Podman Desktop, upstream or the Red Hat build: it handles both the registry login and the Podman machine's subscription.
 - Use registry service accounts, not personal credentials, on CI and shared build hosts.
 - Pin to a digest if your results need to be reproducible.
+- Then boot what you built. [Booting your image in a test VM]({{ '/test-vm/' | relative_url }}) has the shortest supported routes and what to look at once it is up.
 
 ## At image build time
 
@@ -296,7 +297,7 @@ The Containerfile belongs to whoever builds the image, so the line is theirs to 
 
 ## At first boot and deploy
 
-The image is built. Now it lands on real machines. This group is short because most of the build-time gotchas above collapse into a single pattern that lives here: the first-boot service.
+The image is built. Now it lands on real machines. This group is short because most of the build-time gotchas above collapse into a single pattern that lives here: the first-boot service. To watch it happen, boot the image in a VM: [Booting your image in a test VM]({{ '/test-vm/' | relative_url }}).
 
 ### Do machine-specific setup at first boot
 
