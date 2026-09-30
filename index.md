@@ -9,7 +9,7 @@ If your product is already container-native, you can skip most of this guide. St
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-**Version 0.7, written against RHEL 10 image mode and bootc as of 2026-08-11.**
+**Version 0.74, written against RHEL 10 image mode and bootc as of 2026-09-22.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
@@ -19,6 +19,7 @@ On image mode, the operating system ships as a container image. The customer bui
 
 Where to go deeper:
 
+- [Image mode for RHEL](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux-10/image-mode): Red Hat's product page for image mode. The shortest orientation to what Red Hat is shipping and how it is positioned, which is often what a colleague actually wants when they ask you what this is.
 - [bootc project](https://github.com/bootc-dev/bootc): never seen bootc? Start with the project README for the what and the why.
 - [bootc filesystem docs](https://github.com/bootc-dev/bootc/blob/main/docs/src/filesystem.md): the full version of the filesystem model summarized in the table below.
 - [bootc building guidance](https://github.com/bootc-dev/bootc/blob/main/docs/src/building/guidance.md): upstream's Containerfile patterns for adapting packages; the closest upstream counterpart to this guide.
@@ -80,6 +81,9 @@ The patterns in this guide, in one table. Each row links to the section with the
 | Pattern | Works on image mode? | What to do instead | Details |
 |---------|---------------------|--------------------|---------|
 | Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
+| Pulling `rhel-bootc` without a login | No, it is not on the unauthenticated registry | `podman login registry.redhat.io` first | [Getting an image](#credential-one-a-registry-login) |
+| `sudo podman login`, then a rootless `podman build` | No, the build reads a different credential file | Log in as the identity that runs the build | [Getting an image](#credential-one-a-registry-login) |
+| `RUN dnf install` on an unsubscribed build host | No, the base image carries no repositories | Build on a registered RHEL system, or mount entitlements | [Getting an image](#credential-two-entitlement-for-the-build) |
 | `curl \| bash` installer at deploy time | No, but it works as a build step | Run it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
 | RPM installed by admin post-deployment | No | Include it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
 | `%post` runs `systemctl start` | No | Use `enable` only; start happens at boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
@@ -105,6 +109,90 @@ The patterns in this guide, in one table. Each row links to the section with the
 | `%post` creates users with `useradd` | Risky, `/etc/passwd` drift | Use `sysusers.d` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
 | Expecting `/etc` and `/var` to move together on rollback | They don't | Design for the asymmetry | [Rollbacks](#rollbacks-etc-reverts-var-does-not) |
 | Catching all of the above in a build | Yes, recommended for every build | Run `bootc container lint` on your test builds; ship the line in your snippet | [Lint](#run-bootc-container-lint-in-the-build) |
+
+## Getting a RHEL bootc image
+
+Before any of the patterns below matter, you need a RHEL bootc image on a machine you control. This is where partner engineers lose the most time, and the reason is that two separate credentials are involved and they are easy to mistake for one:
+
+- **A registry login** gets you the base image. Everyone needs this.
+- **A RHEL entitlement** makes `dnf install` work *inside* the build. Separate credential, separate failure, and it bites after the first one is working.
+
+Sort out the first, then the second.
+
+### Where the images are
+
+RHEL bootc base images live in Red Hat's authenticated registry:
+
+- `registry.redhat.io/rhel10/rhel-bootc:latest`
+- `registry.redhat.io/rhel9/rhel-bootc:latest`
+
+They are not on `registry.access.redhat.com`, the registry that serves UBI without a login. Asking for them there returns a specific error, and it is worth recognizing it rather than reading it as a typo:
+
+```
+{"errors":[{"code":"UNSUPPORTED","message":"This repo requires terms acceptance
+and is only available on registry.redhat.io"}]}
+```
+
+Unauthenticated requests to `registry.redhat.io` itself return `401`. There is no anonymous path to these images.
+
+For the tag to build against, check the [Red Hat Ecosystem Catalog](https://catalog.redhat.com/search) rather than a list printed here: `latest` moves, and which minor-version tags exist changes over the release's life. If your test results need to be reproducible, resolve the tag to a digest once (`skopeo inspect`) and pin that.
+
+### Credential one: a registry login
+
+`registry.redhat.io` accepts a Red Hat login or a registry token, and nothing else. If you already have a Red Hat account, that is the same login you use for the Customer Portal. If you don't, two free routes to one exist: joining the [Red Hat Developer Program](https://developers.redhat.com), and a [30-day trial subscription](https://access.redhat.com/products/red-hat-enterprise-linux/evaluation). Either gets you an account that can pull. See [Red Hat Container Registry Authentication](https://access.redhat.com/RegistryAuthentication) for the full picture.
+
+Log in and pull:
+
+```
+$ podman login registry.redhat.io
+$ podman pull registry.redhat.io/rhel10/rhel-bootc:latest
+```
+
+`skopeo login` and `buildah login` work the same way and share the same credential file.
+
+One thing to get right: log in as the identity that will run the build. Red Hat's documentation writes this step as `sudo podman login`, which writes root's credential file. A rootless `podman build` afterwards reads yours, finds nothing, and fails to pull the base image with an authentication error that looks like the login didn't take. Credentials land in `${XDG_RUNTIME_DIR}/containers/auth.json` on Linux and `$HOME/.config/containers/auth.json` on macOS; see [`containers-auth.json(5)`](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md) for the full search order.
+
+For CI or any shared build host, don't put a person's Customer Portal credentials on it. Red Hat provides [registry service accounts](https://access.redhat.com/terms-based-registry/) for exactly this: tokens scoped to registry pulls, one per shared system.
+
+### Credential two: entitlement for the build
+
+A registry login gets you the image. It does not get you the RPM content inside it.
+
+The RHEL bootc base image ships with no repository configuration and no entitlement certificates of its own: `/etc/yum.repos.d/` and `/etc/pki/entitlement/` are both empty, and `dnf repolist` inside it reports no repositories. It picks up RHEL content from the build host. So a build that pulls the base image fine will stop at its first `RUN dnf install` for want of repositories, and the error names a missing package rather than a missing subscription.
+
+The short version: **run your builds on a registered, subscribed RHEL system.** Red Hat's Podman on such a host passes the host's entitlement into the build for you, and nothing in your Containerfile has to know about it. This is the path with the fewest moving parts, and it is the one Red Hat's own documented examples assume.
+
+If you don't have a RHEL subscription to register that host with, the no-cost [Red Hat Enterprise Linux Developer Subscription](https://access.redhat.com/solutions/4078831) is the route most partner engineers take to a working build box. Note that it is a separate thing from the developer *account* in the previous section: the account lets you pull the image, the subscription is what makes `dnf` work once you're building against it. Signing up for the Developer Program does not enroll you in it.
+
+A developer laptop running macOS, Fedora, or Ubuntu is not a registered RHEL host, and neither is a stock CI runner. There the entitlement has to come from certificates you mount as build secrets. That is a legitimate documented pattern, covered in [Repos, credentials, and entitlements](#repos-credentials-and-entitlements) along with why the certificates must not end up in a layer. Whether your subscription terms cover a given CI setup, or a developer subscription covers a given build box, is a question for your Red Hat agreement rather than this guide.
+
+### Trying the model before you have credentials
+
+If you want to shake out filesystem-model problems today and the account paperwork is still moving, the CentOS Stream bootc images are public and need no login:
+
+```
+$ podman pull quay.io/centos-bootc/centos-bootc:stream10
+```
+
+Most of this guide's walls are properties of bootc rather than of RHEL, so a read-only `/opt`, a `/var` that isn't seeded, or a scriptlet that calls `systemctl start` will show up there just as they would on RHEL. It is a fast way to find the shape of the work. It is not RHEL: the package set, the kernel, and the support story all differ, so anything you intend to claim support for has to be built and tested against `rhel-bootc`.
+
+### Confirming you have what you think you have
+
+Two things are worth reading out of the image before you build against it:
+
+```
+$ podman run --rm registry.redhat.io/rhel10/rhel-bootc:latest cat /usr/lib/os-release
+$ podman run --rm registry.redhat.io/rhel10/rhel-bootc:latest sh -c 'cd /usr/lib/modules && echo *'
+```
+
+The first tells you which RHEL you actually pulled, which matters when `latest` has moved under you. The second is the image's kernel version, and it is the number a kernel module has to be built against: see [Kernel modules](#kernel-modules-build-against-the-images-kernel) for why the build host's `uname -r` is the wrong answer.
+
+**What to do:**
+
+- Get a Red Hat login (Developer Program or trial if you don't have one), then `podman login registry.redhat.io` as the identity that runs your builds.
+- Run your builds on a registered, subscribed RHEL system. The no-cost developer subscription is the usual way to get one; it is a separate signup from the developer account. Off such a host, mount entitlement certificates as build secrets.
+- Use registry service accounts, not personal credentials, on CI and shared build hosts.
+- Pin to a digest if your results need to be reproducible.
 
 ## At image build time
 

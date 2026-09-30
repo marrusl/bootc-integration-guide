@@ -37,6 +37,17 @@ The guide's Containerfile example builds a driver against the image's own kernel
 
 One prerequisite that isn't obvious: the build has to run somewhere entitled. The base image ships with no repository configuration and no entitlement certificates of its own (`/etc/yum.repos.d/` and `/etc/pki/entitlement/` are both empty, and `dnf repolist` inside it reports no repositories), so it picks up RHEL content from a registered build host or from entitlement certificates mounted as build secrets. Pulling the image needs only a registry login; building the example needs entitlement. On an unregistered host the build stops at the first `dnf install` for want of repositories, which tells you nothing about whether the example is correct.
 
+### The walkthrough for getting an image has not been run end to end
+
+The [Getting a RHEL bootc image]({{ '/' | relative_url }}#getting-a-rhel-bootc-image) section is assembled from Red Hat's registry authentication documentation, the RHEL image mode documentation, and three live checks against the registries: `rhel-bootc` returns `UNSUPPORTED` on `registry.access.redhat.com` and `401` unauthenticated on `registry.redhat.io`, and the CentOS Stream bootc tags are public on Quay. Nobody has walked the whole path on a fresh account: sign up, log in, pull, build.
+
+Two specifics that a real run would settle:
+
+- Whether a Red Hat Developer Program account is sufficient to pull `rhel10/rhel-bootc`, or whether the terms acceptance in that error message is a step of its own that a developer account does not clear.
+- The rootless-versus-root credential mismatch. The credential paths come from `containers-auth.json(5)` and the conclusion follows from them, but the failure has not been reproduced, so the error text a partner actually sees is not quoted.
+
+**What would settle it:** one pass through the section on a machine with no Red Hat credentials on it yet, noting anywhere the steps don't match what happens. The tag question travels with it: the section deliberately points at the Ecosystem Catalog instead of listing tags, and if a stable minor-version tag scheme turns out to exist it is worth naming.
+
 ## Calls we haven't made yet
 
 ### Should transient root get a mention alongside state overlays?
