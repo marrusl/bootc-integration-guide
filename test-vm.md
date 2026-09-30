@@ -8,15 +8,13 @@ You have built an image with your package in it. Before you can say anything abo
 
 Three things to know before picking a route:
 
-- The container image becomes a disk image, and the disk image becomes a VM. RHEL's tool for the first step is bootc-image-builder, and it reads the image from root's container storage on the build host: build it with `sudo podman build`, or hand the builder a registry reference after a `sudo podman login` to that registry.
-- A disk image needs a user and an SSH key baked in, or there is no way to log in. The builder takes them from a `config.toml`.
-- Once booted, the machine updates from a registry, not from the build host, so iterating means pushing the rebuilt image somewhere the VM can reach.
+- The container image becomes a VM either directly, with bcvk, or by way of a disk image, with bootc-image-builder. bcvk reads your own container storage, so a rootless `podman build` is enough. The builder reads root's: for that path build with `sudo podman build`, or hand the builder a registry reference after a `sudo podman login` to that registry.
+- A disk image needs a user and an SSH key baked in, or there is no way to log in. The builder takes them from a `config.toml`; bcvk injects a key for you.
+- Once booted, the machine updates from a registry, not from the build host, so iterating means pushing the rebuilt image somewhere the VM can reach. bcvk can bind the host's container storage into the VM instead.
 
-The supported path is one tool, bootc-image-builder, with a different output type per hypervisor: a QCOW2 for KVM, a VMDK for VMware, an installer ISO for anything else. The KVM case is worked in full below, and the other two are the same command with one flag changed.
+Two tools cover it. bcvk boots the container image straight into a VM in one command and is the fastest way to see your package running. bootc-image-builder makes the disk image your customers will deploy, with an output type per hypervisor, and is the path you claim support against. Start with bcvk, and come back to the builder when you need a disk image or a hypervisor other than KVM.
 
-## The supported path: a disk image, booted with KVM
-
-This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL documentation.
+## The image you will boot
 
 If you do not have a Containerfile yet, this is the smallest complete one. Each line is a section of the guide:
 
@@ -33,7 +31,26 @@ RUN systemctl enable myvendor-agent.service
 RUN bootc container lint
 ```
 
-A package with writable directories under `/opt` adds the symlink lines from [the `/opt` section]({{ '/' | relative_url }}#opt-is-read-only-at-runtime) after the install.
+A package with writable directories under `/opt` adds the symlink lines from [the `/opt` section]({{ '/' | relative_url }}#opt-is-read-only-at-runtime) after the install. Build it with `podman build -t localhost/myvendor-test .`, and the rest of this page uses that name.
+
+## Fastest: boot the image with bcvk
+
+[bcvk](https://github.com/bootc-dev/bcvk) is the bootc project's virtualization kit. It boots a container image straight into a VM, with no disk image step and no `config.toml`:
+
+```
+$ sudo dnf install bcvk
+$ bcvk ephemeral run-ssh localhost/myvendor-test:latest
+```
+
+The install line works as is on Fedora 42 and later. On RHEL 9 or 10, [enable EPEL](https://docs.fedoraproject.org/en-US/epel/getting-started/) first. The host also needs QEMU/KVM, `virtiofsd`, and Podman; bcvk's [installation page](https://github.com/bootc-dev/bcvk/blob/main/docs/src/installation.md) has the full list. The second line is a shell inside a VM booted from your image, gone when you exit.
+
+Its [quick start](https://github.com/bootc-dev/bcvk/blob/main/docs/src/quick-start.md) covers the rest. Two commands worth knowing here: `bcvk libvirt run --name myvendor-test localhost/myvendor-test:latest` creates a VM that persists, with `bcvk libvirt ssh myvendor-test` to get in, and adding `--update-from-host` to that run binds your container storage into the VM so a `bootc upgrade` inside it picks up the rebuilt image without a registry.
+
+Where it stands: bcvk is an upstream project from the bootc team, packaged in Fedora and EPEL, Linux only. It is not commercially supported yet, and support is planned. The team wants to hear about bugs and feature requests, so file them in the [issue tracker](https://github.com/bootc-dev/bcvk/issues). Use it for the loop of edit, rebuild, boot, look. When you write down what you support, test it through the path below as well, since that is the artifact your customers deploy.
+
+## The supported path: a disk image from bootc-image-builder
+
+This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL documentation. It is the path for a disk image you can hand to any hypervisor, and the one to test against before you claim support.
 
 Write a `config.toml` next to your Containerfile with the login you will use:
 
@@ -75,18 +92,6 @@ vSphere takes a VMDK. The builder command above with `--type vmdk` writes `./out
 ## Anything else: an installer ISO
 
 For a hypervisor with no disk-image type of its own, the builder can produce an installer ISO. The builder command above with `--type anaconda-iso` writes `./output/bootiso/install.iso`, which boots on anything that boots a RHEL ISO and installs your image unattended; see [Creating bootable ISOs](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-iso-images-by-using-bootc-image-builder) for the Kickstart it embeds. RHEL 10 lists the ISO type as Technology Preview, so treat it as a test convenience rather than the path you claim support against.
-
-## The fast loop: bcvk
-
-For the inner loop of edit, rebuild, boot, look, the upstream bootc project ships [bcvk](https://github.com/bootc-dev/bcvk), which boots a container image as a VM directly, with no disk image step and no `config.toml`:
-
-```
-$ bcvk ephemeral run-ssh localhost/myvendor-test:latest
-```
-
-That is a shell inside a VM booted from the image, gone when you exit. `bcvk libvirt run --name myvendor-test localhost/myvendor-test:latest` creates one that persists, `bcvk libvirt ssh myvendor-test` gets you in, and `--update-from-host` on the run binds your container storage into the VM so an upgrade sees the rebuilt image without a registry. It reads from your own container storage, so a rootless `podman build` is enough.
-
-Its status, stated plainly: bcvk is an upstream project, packaged in Fedora 42 and later and in EPEL 9 and 10, Linux only, and not part of RHEL today. Use it to find problems fast, and run what you intend to claim support for through one of the routes above.
 
 ## On a Mac
 
