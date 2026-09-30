@@ -12,9 +12,9 @@ Three things to know before picking a route:
 - A disk image needs a user and an SSH key baked in, or there is no way to log in. The builder takes them from a `config.toml`.
 - Once booted, the machine updates from a registry, not from the build host, so iterating means pushing the rebuilt image somewhere the VM can reach.
 
-Two routes are supported by RHEL. Take the first if your build host is a Linux machine with KVM, the second if you already have a hypervisor you run RHEL on.
+The supported path is one tool, bootc-image-builder, with a different output type per hypervisor: a QCOW2 for KVM, a VMDK for VMware, an installer ISO for anything else. The KVM case is worked in full below, and the other two are the same command with one flag changed.
 
-## Route one: a disk image, booted with KVM
+## The supported path: a disk image, booted with KVM
 
 This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL book.
 
@@ -51,25 +51,13 @@ $ sudo virt-install --name myvendor-test --memory 4096 --vcpus 2 \
 
 `virt-install` attaches a console, and `sudo virsh domifaddr myvendor-test` gives you the address to SSH to as `test`. The builder image comes from `registry.redhat.io`, so this step needs the registry login from [Getting a RHEL bootc image]({{ '/' | relative_url }}#getting-a-rhel-bootc-image) and not the entitlement: nothing is installed here, only converted. The full list of things `config.toml` can set, including partition sizes, is in [Supported image customizations](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#supported-image-customizations-for-a-configuration-file).
 
-## Route two: reinstall a RHEL VM you already have
-
-If you already run RHEL 10 VMs on VMware, Parallels, VirtualBox, Hyper-V, or a cloud, the shortest path involves no disk image at all. Push your container image to a registry the VM can reach, then inside a package-based RHEL 10 VM that is registered so `dnf` works:
-
-```
-# dnf -y install system-reinstall-bootc
-# system-reinstall-bootc quay.io/yourorg/myvendor-test:latest
-# reboot
-```
-
-`system-reinstall-bootc` wraps `bootc install to-existing-root`: it pulls the image, asks which SSH key to carry over, and reinstalls the running system in place from the image. After the reboot, `bootc status` shows your image as the booted deployment, and because it came from a registry, `bootc upgrade` works from then on with no further setup. The RHEL book documents this for cloud instances in [Deploying a container image by using a single command](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-a-single-command). Nothing in it is cloud-specific, and it is the route to try first on a hypervisor that has no bootc tooling of its own.
-
 ## VMware
 
-vSphere takes a VMDK. The builder command from route one with `--type vmdk` writes `./output/vmdk/disk.vmdk`, and the `config.toml` user works there too. The RHEL book's [vSphere section](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-and-creating-a-rhel-virtual-machine-in-vsphere) covers the import with `govc` and the cloud-init metadata that a production VM wants. For a test VM that is more steps than it is worth, and route two gets you to the same place faster. Workstation and Fusion can attach the VMDK to a new VM directly.
+vSphere takes a VMDK. The builder command above with `--type vmdk` writes `./output/vmdk/disk.vmdk`, and the `config.toml` user works there too. Workstation and Fusion can attach that disk to a new VM directly. For vSphere itself, the RHEL book's [vSphere section](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-and-creating-a-rhel-virtual-machine-in-vsphere) covers the import with `govc` and the cloud-init metadata a production VM wants; a test VM does not need the metadata.
 
 ## Anything else: an installer ISO
 
-For a hypervisor with no other route, the builder can produce an installer ISO. The route one command with `--type anaconda-iso` writes `./output/bootiso/install.iso`, which boots on anything that boots a RHEL ISO and installs your image unattended; see [Creating bootable ISOs](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-iso-images-by-using-bootc-image-builder) for the Kickstart it embeds. RHEL 10 lists the ISO type as Technology Preview, so treat it as a test convenience rather than the path you claim support against.
+For a hypervisor with no disk-image type of its own, the builder can produce an installer ISO. The builder command above with `--type anaconda-iso` writes `./output/bootiso/install.iso`, which boots on anything that boots a RHEL ISO and installs your image unattended; see [Creating bootable ISOs](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-iso-images-by-using-bootc-image-builder) for the Kickstart it embeds. RHEL 10 lists the ISO type as Technology Preview, so treat it as a test convenience rather than the path you claim support against.
 
 ## The fast loop: bcvk
 
@@ -85,7 +73,7 @@ Its status, stated plainly: bcvk is an upstream project, packaged in Fedora 42 a
 
 ## On a Mac
 
-Podman Desktop's [bootc extension](https://github.com/podman-desktop/extension-bootc) wraps the builder: pick the image, choose a disk type, and a Create VM button on the Disk Images page boots the result on macOS and Linux. It needs the Podman machine in rootful mode, and on Apple silicon it builds only for the machine's own architecture, so what you test is an aarch64 build of your product, which may not exist. Windows builds the disk image but cannot launch the VM yet. Parallels and UTM work with route two, an aarch64 RHEL 10 VM reinstalled in place, or with the ISO.
+Podman Desktop's [bootc extension](https://github.com/podman-desktop/extension-bootc) wraps the builder: pick the image, choose a disk type, and a Create VM button on the Disk Images page boots the result on macOS and Linux. It needs the Podman machine in rootful mode, and on Apple silicon it builds only for the machine's own architecture, so what you test is an aarch64 build of your product, which may not exist. Windows builds the disk image but cannot launch the VM yet. Parallels and UTM boot the installer ISO like any other RHEL ISO, provided it is an aarch64 build, which on Apple silicon is the only kind the builder makes.
 
 ## What to look at once it boots
 

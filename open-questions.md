@@ -54,14 +54,13 @@ Two specifics that a real run would settle:
 
 ### The test VM page has not been run end to end
 
-[Booting your image in a test VM]({{ '/test-vm/' | relative_url }}) condenses the RHEL book's disk-image and KVM procedures, and every command on it traces to that book, to bcvk's own documentation, or to the Podman Desktop bootc extension's README. Four of its claims go one step past what those sources say:
+[Booting your image in a test VM]({{ '/test-vm/' | relative_url }}) condenses the RHEL book's disk-image and KVM procedures, and every command on it traces to that book, to bcvk's own documentation, or to the Podman Desktop bootc extension's README. Three of its claims go one step past what those sources say:
 
-- `system-reinstall-bootc` on a VM that is not a cloud instance. The book documents it for AWS; the page says nothing in it is cloud-specific and offers it as the first thing to try on Parallels, VMware, VirtualBox, or Hyper-V. A default RHEL 10 VM install puts root on LVM, which is a layout the cloud images do not use, so that is the case to run.
 - The installer ISO on a hypervisor other than KVM. RHEL 10 lists the ISO type as Technology Preview, and the page names Parallels as the case in mind without having booted it there.
 - A `config.toml` user on a VMDK attached directly to Workstation or Fusion, without the cloud-init metadata the vSphere procedure supplies.
 - bcvk against `rhel-bootc`. Its README examples use Fedora and CentOS Stream images, and the RHEL images have not been run through `bcvk ephemeral run-ssh` for this guide.
 
-**What would settle it:** one run of each, on the hypervisor in question, noting where the steps or the output differ from the page. The first is the most useful, since it is the route the page recommends for every hypervisor without bootc tooling.
+**What would settle it:** one run of each, on the hypervisor in question, noting where the steps or the output differ from the page. The ISO on Parallels is the most useful, since it is the page's answer for every hypervisor without a disk-image type of its own.
 
 ## Calls we haven't made yet
 
