@@ -18,6 +18,23 @@ The supported path is one tool, bootc-image-builder, with a different output typ
 
 This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL book.
 
+If you do not have a Containerfile yet, this is the smallest complete one. Each line is a section of the guide:
+
+```dockerfile
+FROM registry.redhat.io/rhel10/rhel-bootc:latest
+
+# Your repo and its signing key, shipped as files
+COPY myvendor.repo /etc/yum.repos.d/
+COPY RPM-GPG-KEY-myvendor /etc/pki/rpm-gpg/
+
+RUN dnf -y install myvendor-agent && dnf clean all
+RUN systemctl enable myvendor-agent.service
+
+RUN bootc container lint
+```
+
+A package with writable directories under `/opt` adds the symlink lines from [the `/opt` section]({{ '/' | relative_url }}#opt-is-read-only-at-runtime) after the install.
+
 Write a `config.toml` next to your Containerfile with the login you will use:
 
 ```toml

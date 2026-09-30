@@ -397,7 +397,7 @@ If the tree genuinely can't be restructured, there is a second documented option
 
 ### `/usr/local`: same rules as `/usr`
 
-On image mode, `/usr/local` is a regular directory (not a symlink) but is **read-only at runtime**, just like the rest of `/usr`. Software that installs to `/usr/local/bin` at build time works fine. Software that expects to drop binaries there at runtime (self-updaters, plugin managers, post-deploy scripts) will fail.
+On image mode, `/usr/local` is a regular directory (not a symlink) but is **read-only at runtime**, just like the rest of `/usr`. Software that installs to `/usr/local/bin` at build time works fine. Software that expects to drop binaries there at runtime (self-updaters, plugin managers, post-deploy scripts) will fail. A `/usr/local` tree that mixes read-only content with directories written at runtime takes the same fix as `/opt`: move the writable directories to `/var` and symlink them back, per [the `/opt` section](#opt-is-read-only-at-runtime).
 
 **What to do:** Install at build time. If you genuinely need to write binaries at runtime, use `/var/lib/<package>/bin` and add it to `PATH`, or run that component as a container.
 
