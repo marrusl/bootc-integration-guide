@@ -9,7 +9,7 @@ If your product is already container-native, you can skip most of this guide. St
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-**Version 0.80, written against image mode for RHEL 10 and bootc as of 2026-09-30.**
+**Version 0.80, written against image mode on RHEL 10 and bootc as of 2026-09-30.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
@@ -23,7 +23,7 @@ Where to go deeper:
 - [bootc project](https://github.com/bootc-dev/bootc): never seen bootc? Start with the project README for the what and the why.
 - [bootc filesystem docs](https://github.com/bootc-dev/bootc/blob/main/docs/src/bootc-filesystem.7.md): the full version of the filesystem model summarized in the table below.
 - [bootc building guidance](https://github.com/bootc-dev/bootc/blob/main/docs/src/building/bootc-building-images.7.md): upstream's Containerfile patterns for adapting packages; the closest upstream counterpart to this guide.
-- [Image mode for RHEL 10 documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html-single/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/index): the full RHEL reference for building, deploying, and managing image mode systems.
+- [RHEL 10 documentation for image mode](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html-single/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/index): the full RHEL reference for building, deploying, and managing image mode systems.
 
 ## The one thing to understand first
 
