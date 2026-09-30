@@ -9,7 +9,7 @@ If your product is already container-native, you can skip most of this guide. St
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-**Version 0.75, written against RHEL 10 image mode and bootc as of 2026-09-29.**
+**Version 0.80, written against RHEL 10 image mode and bootc as of 2026-09-30.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
