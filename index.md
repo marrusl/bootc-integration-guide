@@ -9,13 +9,13 @@ If your product is already container-native, you can skip most of this guide. St
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-**Version 0.74, written against RHEL 10 image mode and bootc as of 2026-09-22.**
+**Version 0.75, written against RHEL 10 image mode and bootc as of 2026-09-29.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
 ## How image mode works
 
-On image mode, the operating system ships as a container image. The customer builds it with a Containerfile, the same way they build application containers, starting from a Red Hat base image. The running system boots from that image, and the OS content is read-only. Updates are atomic: the system pulls a newer image and switches to it on reboot, and it can roll back the same way. Your software becomes one layer of that image, installed during that build.
+On image mode, the operating system ships as a container image. The customer builds it with a Containerfile, the same way they build application containers, starting from a Red Hat base image. An install step writes that image to disk once, and from then on the OS content on the running system is the image's content, read-only. How it gets onto disk (a disk image from bootc image builder, a kickstart, or `bootc install`) is the customer's concern and does not touch your software. Updates are atomic: bootc pulls a newer image, stages it beside the current one, and the machine switches to it on reboot, and it can roll back the same way. Your software becomes one layer of that image, installed during that build.
 
 Where to go deeper:
 
@@ -50,65 +50,22 @@ If your software can run as a container, most of this guide stops applying to yo
 
 ## How much work is this?
 
-The patterns in this guide are not equally expensive, and the difference that matters most is not how technical the fix is. It is whether your customer can do it themselves, in their own image build, with what you ship today.
+The patterns in this guide are not equally expensive, and the difference that matters most is not how technical the fix is. It is how much of the fix is yours to make, and how much your customer can do in their own image build with what you ship today. Four buckets, in rising order of your involvement. Each ends with something you publish, because a path you have documented is different from one a customer found to work. Software that can run as a container instead is [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all), and it is worth answering before any of the rest.
 
-**Bucket 0: it does not need to be in the OS image.** If your software can run as a container, the host filesystem rules stop applying to it and most of this guide stops applying to you. That is [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all), and it is worth answering before any of the rest.
+**Bucket 1: nothing changes.** A `.repo` file, your GPG key, a `RUN dnf install` or `RUN ./install.sh`, and you are done: plain files, nothing about your software changes. Most software lands here. Confirm it rather than assume it: run `bootc container lint` against a test build and read your scriptlets with `rpm -qp --scripts`. The silent failure in [the build environment](#the-build-environment-is-a-container-not-a-booted-system) leaves your service unenabled without failing the build: a green build is not by itself evidence. What you ship is the statement: "installs with `dnf install`, supported on RHEL image mode" is the whole of it.
 
-**Bucket 1: it installs and runs unchanged.** A `.repo` file, your GPG key, a `RUN dnf install` or `RUN ./install.sh`, and you are done: plain files, nothing about your software changes. Most software lands here. Confirm it rather than assume it: run `bootc container lint` against a test build and read your scriptlets with `rpm -qp --scripts`. The silent failure in [the build environment](#the-build-environment-is-a-container-not-a-booted-system) leaves your service unenabled without failing the build: a green build is not by itself evidence.
+**Bucket 2: a workaround the customer can apply.** Your software is fine, but the build has to be adjusted, and the customer can make the adjustment in their own Containerfile with what you ship today. The common case is an `/opt` tree mixing read-only content with directories your software writes to: logs, caches, a definitions database. Move those to `/var`, symlink them back, and ship `tmpfiles.d` entries so the targets exist on every machine, not only newly provisioned ones. See [`/opt`](#opt-is-read-only-at-runtime). Customers work this out on their own all the time. What you ship is the snippet, documented, so the workaround is the supported path.
 
-**Bucket 2: the build needs one more step.** Your software is fine, but the build has to be adjusted. The common case is an `/opt` tree mixing read-only content with directories your software writes to: logs, caches, a definitions database. Move those to `/var`, symlink them back, and ship `tmpfiles.d` entries so the targets exist on every machine, not only newly provisioned ones. See [`/opt`](#opt-is-read-only-at-runtime). Repo credentials and entitlements land here too: they need [`--mount=type=secret`](#repos-credentials-and-entitlements) to stay out of the layers. Either way the customer's Containerfile carries the change and your source does not.
+**Bucket 3: a build recipe only you can write.** You distribute a kernel module as source. The customer can run a multistage build, but the recipe has to come from you: a builder stage with `kernel-devel` pinned to the image's kernel, the module built against it, and the result installed in the final stage. See [Kernel modules](#kernel-modules-build-against-the-images-kernel). What you ship is that recipe, tested against `rhel-bootc`. If you already ship a prebuilt module RPM, it installs in the final stage unchanged, against a kernel it was built for or one that is kABI-compatible with it, and you are in bucket 1.
 
-**Bucket 3: the build has to target the deployed system, not the build host.** What the build needs is there, your tooling just reads the build host instead of the image: anything that inspects the running system gets the wrong answer. Kernel modules are the worked case. The module has to be built against the kernel in the image, so the build gains a builder stage with `kernel-devel` pinned to that kernel version: see [Kernel modules](#kernel-modules-build-against-the-images-kernel). If you already ship a prebuilt module RPM, it installs in the final stage unchanged, against a kernel it was built for or one that is kABI-compatible with it.
+**Bucket 4: a change to the product.** Your installer assumes a running host: it probes the machine, contacts a license server, or asks a question, and the build has no hardware, no running systemd, and no real answer to give. Three things to try before concluding you are here. Look for a flag that skips the probe or runs the installer non-interactively: many vendor installers have one, and with it the customer can install at build time and move the machine-specific step to a first-boot unit of their own, which is bucket 2. If the value being derived is the same on every machine, it is a static file you can ship. And test, rather than assume, whether the software re-derives it at startup and repairs itself anyway: the build goes green either way. Failing all three, the change is yours, and it comes in two parts: a flag that lets the installer run without the probe, and a oneshot service gated on a stamp file in `/var` that does the probe on the real machine. See [first boot](#do-machine-specific-setup-at-first-boot). This is the most work of the four, and the most of all when the installer has no way past the check and fails loudly.
 
-**Bucket 4: what the build needs is not there at all.** There is no hardware, no running systemd, no D-Bus, nothing to re-point the build at, so an installer that probes the machine, contacts a license server, or asks a question cannot get a real answer during the build.
-
-Three things to try before concluding you are here. Look for a flag that skips the probe or runs the installer non-interactively: many vendor installers have one, and one more argument in the `RUN` line puts you in bucket 2. If the value being derived is the same on every machine, it is a static file you can ship. And test, rather than assume, whether the software re-derives it at startup and repairs itself anyway: the build goes green either way. Failing all three, the work moves to a oneshot service gated on a stamp file in `/var`: see [first boot](#do-machine-specific-setup-at-first-boot).
-
-| Bucket | What it looks like | Where the fix lives | Customer can self-serve |
-|--------|--------------------|---------------------|-------------------------|
-| **0** | Runs as a container instead of inside the OS image | Your release process, once | Yes |
-| **1** | Installs unchanged with `RUN dnf install` or your install script | One line in the Containerfile | Yes |
-| **2** | Works after an adjustment in the build: writable `/opt` paths symlinked to `/var`, `tmpfiles.d` entries, credentials as build secrets | The image build | Yes |
-| **3** | Inspects the build host where it should inspect the image: a module built against the wrong kernel | The image build, with a builder stage | Yes |
-| **4** | Needs hardware, a running service, or an answer the build cannot supply; or writes where nothing can redirect it | The deployed machine, or your next release | Sometimes: check for a skip flag and for self-repair on boot first, and if neither applies it is yours to fix |
-
-One thing the buckets do not settle: whether the path is documented. That is a separate axis from effort, and it is the one a customer can see from the outside. A note is worth writing at every bucket, including the easiest, where "installs with `dnf install`, supported on RHEL image mode" is the whole of it. It is the difference between a path you stand behind and one a customer found to work.
-
-## Quick reference
-
-The patterns in this guide, in one table. Each row links to the section with the details and the fix.
-
-| Pattern | Works on image mode? | What to do instead | Details |
-|---------|---------------------|--------------------|---------|
-| Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
-| Pulling `rhel-bootc` without a login | No, it is not on the unauthenticated registry | `podman login registry.redhat.io` first | [Getting an image](#credential-one-a-registry-login) |
-| `sudo podman login`, then a rootless `podman build` | No, the build reads a different credential file | Log in as the identity that runs the build | [Getting an image](#credential-one-a-registry-login) |
-| `RUN dnf install` on an unsubscribed build host | No, the base image carries no repositories | Build on a registered RHEL system, or mount entitlements | [Getting an image](#credential-two-entitlement-for-the-build) |
-| `curl \| bash` installer at deploy time | No, but it works as a build step | Run it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
-| RPM installed by admin post-deployment | No | Include it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
-| `%post` runs `systemctl start` | No | Use `enable` only; start happens at boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
-| Scriptlet guards `systemctl` behind a `/run/systemd/system` check | Silently skipped: build passes, image has no service | Drop the guard; `enable` works in builds | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
-| `%post` prompts for input (license key, EULA) | No, builds have no TTY and no open stdin | Config file in `/etc`, or first boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
-| `%post` opens ports with `firewall-cmd` | No, firewalld isn't running | Ship zone config, or run `firewall-offline-cmd` in the build | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
-| `%post` probes hardware | No, sees the build environment | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
-| `%post` phones home for licensing | No, wrong host identity | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
-| First-boot unit gated on `ConditionFirstBoot=yes` | Unreliable: machine-id can be pre-initialized | Gate on a stamp file in `/var` instead | [First boot](#do-machine-specific-setup-at-first-boot) |
-| DKMS compile on the deployed host | No | Compile in the build against the image's kernel; ship the result | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
-| `%post` edits `/boot` or GRUB config | No, bootc owns kernel and bootloader | Ship kernel arguments as a `kargs.d` TOML | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
-| Credentials in `.repo` files or image layers | No, layers are readable by anyone who can pull | Use build secrets | [Repos and credentials](#repos-credentials-and-entitlements) |
-| Assuming `/var/lib/<pkg>` exists at runtime | Not guaranteed | `tmpfiles.d` or `StateDirectory=` | [/var rules](#var-starts-from-the-image-then-belongs-to-the-machine) |
-| Package creates a physical `/var/run` directory | No, fatal lint error | It's a symlink to `/run`; leave it alone | [/var rules](#var-starts-from-the-image-then-belongs-to-the-machine) |
-| Install to `/opt/<vendor>/` (all content) | Partially, read-only at runtime | Symlink writable subdirs to `/var` | [/opt](#opt-is-read-only-at-runtime) |
-| Writing runtime data to `/opt/<pkg>/data/` | No, read-only | Use `/var/lib/<pkg>/` | [/opt](#opt-is-read-only-at-runtime) |
-| Drop binaries into `/usr/local` at runtime | No, read-only | Install at build time | [/usr/local](#usrlocal-same-rules-as-usr) |
-| Self-updating agent binaries | No | Update via the image rebuild pipeline | [Self-updating software](#self-updating-software-will-not-work) |
-| Auto-update signature DB under `/opt` | No, read-only | Store mutable data in `/var/lib/` | [Self-updating software](#self-updating-software-will-not-work) |
-| `dnf install` a debug tool on a live system | Only transiently | `bootc usr-overlay`, or a tools container | [Debugging](#debugging-on-a-running-system) |
-| Ansible/Puppet `dnf install` at runtime | No | Packages in the Containerfile; config mgmt for `/etc` | [Configuration management](#configuration-management-works-differently) |
-| Config files in `/etc` only | Works, but upgrade behavior differs | Defaults in `/usr`, overrides in `/etc` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
-| `%post` creates users with `useradd` | Risky, `/etc/passwd` drift | Use `sysusers.d` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
-| Expecting `/etc` and `/var` to move together on rollback | They don't | Design for the asymmetry | [Rollbacks](#rollbacks-etc-reverts-var-does-not) |
-| Catching all of the above in a build | Yes, recommended for every build | Run `bootc container lint` on your test builds; ship the line in your snippet | [Lint](#run-bootc-container-lint-in-the-build) |
+| Bucket | What it looks like | Who does the work | What you ship |
+|--------|--------------------|-------------------|---------------|
+| **1** | Installs unchanged with `RUN dnf install` or your install script | Nobody | A support statement |
+| **2** | Works after an adjustment in the build: writable `/opt` paths symlinked to `/var`, with `tmpfiles.d` entries | The customer, in their Containerfile | The snippet, documented |
+| **3** | A kernel module distributed as source | You write the recipe, the customer runs it | A tested multistage build |
+| **4** | An installer that needs a running host and has no way to skip the check | You, in the product | A bypass flag and a first-boot unit |
 
 ## Getting a RHEL bootc image
 
@@ -164,7 +121,7 @@ The short version: **run your builds on a registered, subscribed RHEL system.** 
 
 If you don't have a RHEL subscription to register that host with, the no-cost [Red Hat Enterprise Linux Developer Subscription](https://access.redhat.com/solutions/4078831) is the route most partner engineers take to a working build box. Note that it is a separate thing from the developer *account* in the previous section: the account lets you pull the image, the subscription is what makes `dnf` work once you're building against it. Signing up for the Developer Program does not enroll you in it.
 
-A developer laptop running macOS, Fedora, or Ubuntu is not a registered RHEL host, and neither is a stock CI runner. There the entitlement has to come from certificates you mount as build secrets. That is a legitimate documented pattern, covered in [Repos, credentials, and entitlements](#repos-credentials-and-entitlements) along with why the certificates must not end up in a layer. Whether your subscription terms cover a given CI setup, or a developer subscription covers a given build box, is a question for your Red Hat agreement rather than this guide.
+A developer laptop running macOS, Fedora, or Ubuntu is not a registered RHEL host, and neither is a stock CI runner. There the entitlement has to come from certificates you mount as build secrets. That is a legitimate documented pattern, covered in [Repo files, GPG keys, and credentials](#repo-files-gpg-keys-and-credentials) along with why the certificates must not end up in a layer. Whether your subscription terms cover a given CI setup, or a developer subscription covers a given build box, is a question for your Red Hat agreement rather than this guide.
 
 ### Trying the model before you have credentials
 
@@ -174,7 +131,7 @@ If you want to shake out filesystem-model problems today and the account paperwo
 $ podman pull quay.io/centos-bootc/centos-bootc:stream10
 ```
 
-Most of this guide's walls are properties of bootc rather than of RHEL, so a read-only `/opt`, a `/var` that isn't seeded, or a scriptlet that calls `systemctl start` will show up there just as they would on RHEL. It is a fast way to find the shape of the work. It is not RHEL: the package set, the kernel, and the support story all differ, so anything you intend to claim support for has to be built and tested against `rhel-bootc`.
+Most of this guide's walls are properties of bootc rather than of RHEL, so a read-only `/opt`, a `/var` that isn't seeded, or a scriptlet that calls `systemctl start` will show up there just as they would on RHEL. It is a fast way to find out where the work is. It is not RHEL: the package set, the kernel, and the support story all differ, so anything you intend to claim support for has to be built and tested against `rhel-bootc`.
 
 ### Confirming you have what you think you have
 
@@ -293,27 +250,24 @@ RUN --mount=type=bind,from=builder,source=/var/lib/dkms/mydriver/1.0,target=/tmp
 
 One consistency note on the example: installing `epel-release` from a URL is trust on first use, the same pattern this guide's GPG guidance warns against. It is defensible here because it is EPEL's own documented bootstrap, it runs in a builder stage that is discarded, and only the compiled module crosses into the final image.
 
-One wall that does not move: Secure Boot module signing. Under Secure Boot signature enforcement, an out-of-tree module that is unsigned, or signed with a key the machine doesn't trust, will not load, on image mode exactly as on traditional RHEL. The obligation is unchanged. What moves is where the signing happens: into the build, because that is where the module now gets built. That makes a builder stage a poor place to generate a key, since anything generated there is discarded along with the stage, and a module signed that way carries a signature no machine can verify. Nothing in the build reports a problem, and the failure surfaces at load time on a Secure Boot system. If your customers run Secure Boot, sign during the build with a key you control and mount it as a build secret; see [Repos, credentials, and entitlements](#repos-credentials-and-entitlements).
+One wall that does not move: Secure Boot module signing. Under Secure Boot signature enforcement, an out-of-tree module that is unsigned, or signed with a key the machine doesn't trust, will not load, on image mode exactly as on traditional RHEL. The obligation is unchanged. What moves is where the signing happens: into the build, because that is where the module now gets built. That makes a builder stage a poor place to generate a key, since anything generated there is discarded along with the stage, and a module signed that way carries a signature no machine can verify. Nothing in the build reports a problem, and the failure surfaces at load time on a Secure Boot system. If your customers run Secure Boot, sign during the build with a key you control and mount it as a build secret; see [Repo files, GPG keys, and credentials](#repo-files-gpg-keys-and-credentials).
 
 **What to do:** Build your module against the image's kernel, in a builder stage with `kernel-devel` pinned to that version, using whatever you build with today: `rpmbuild`, `make`, or DKMS with `-k`. Ship the built artifact in the final image, and leave no compile step for the deployed host.
 
-### Repos, credentials, and entitlements
+### Repo files, GPG keys, and credentials
 
-When your RPM repository goes into a Containerfile, the `.repo` file and any credentials in it become part of the image layers. Anyone who can pull the image can read every file in it: pulling and unpacking the layers with standard tools (`skopeo copy`, `podman save`, or simply running the image) exposes embedded credentials. Build args and environment variables are even easier to read: they show up in the image history via `podman inspect`.
-
-Build secrets exist for this. `--mount=type=secret` in the Containerfile makes a credential available during the build without landing it in a layer. The mount protects only what stays in it: a credential copied into `/etc/yum.repos.d/`, a config file, or a cache directory persists in a layer just as surely as `COPY` would, and build logs persist too, so an `echo`, a verbose flag, or a failing command can write the value into them. Read the secret directly from `/run/secrets/<id>` and keep it out of anything that outlives the build. All of this is about build-time credentials like repo access; a secret that must exist on the deployed host (a pull secret for bound container images, for example) is a different case, and RHEL's own docs deliberately persist it in the image.
+Your `.repo` file and your GPG key go into the image at build time like any other file, and they stay on the deployed system. That is the normal case, and it is useful: `bootc usr-overlay` puts a transient writable overlay on `/usr` (see [Debugging](#debugging-on-a-running-system)), and with your repo in place a customer can `dnf install` a tool or a test build from it for the length of a session. Nothing about image mode asks you to strip the repo out.
 
 GPG keys are public, but public is not the same as trusted. Your key is the trust anchor: every RPM in the build is accepted because that key vouches for it. Don't have customers fetch it from a URL at build time. Whatever the server returns that day becomes the root of trust, and a compromised host can supply both the packages and the key that validates them.
 
 Instead, ship the key as a file in your integration materials. The customer vendors it into their build context, copies it into the image at `/etc/pki/rpm-gpg/`, and references it with `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-yourvendor` in the `.repo` file (or runs `rpm --import` on that same path). Publish the key's fingerprint through a separate channel so they can verify what they vendored. File-based keys also keep working in air-gapped builds, which is why RHEL's own offline guidance recommends the same pattern.
 
-RHEL entitlements in CI are the same mechanism: mounting subscription certificates as build secrets is a legitimate, documented pattern, and baking them into image layers is the anti-pattern. Whether your subscription terms cover a given CI setup and build volume is a question for your Red Hat agreement, not this guide.
+If your repository needs a credential, that is the one thing to keep out of the image. Anyone who can pull the image can read every file in it: pulling and unpacking the layers with standard tools (`skopeo copy`, `podman save`, or simply running the image) exposes anything embedded, and build args and environment variables are easier still, since they show up in the image history via `podman inspect`. Build secrets exist for this: `--mount=type=secret` in the Containerfile makes a credential available during the build without landing it in a layer. The mount protects only what stays in it: a credential copied into a config file or a cache directory persists in a layer just as surely as `COPY` would, and build logs persist too, so an `echo`, a verbose flag, or a failing command can write the value into them. Read the secret from `/run/secrets/<id>` and keep it out of anything that outlives the build. RHEL entitlement certificates on a build host that is not a registered RHEL system use the same mechanism; see [Credential two](#credential-two-entitlement-for-the-build).
 
 **What to do:**
 
-- Put credentials in build secrets, never in layers, `ENV`, or build args.
-- Ship your GPG key as a file; publish its fingerprint out of band.
-- In CI, mount entitlement certificates as build secrets too.
+- Ship your `.repo` file and GPG key as files; publish the key's fingerprint out of band.
+- If the repo needs a credential, put it in a build secret, never in a layer, `ENV`, or a build arg.
 
 ### Run `bootc container lint` in the build
 
@@ -499,3 +453,39 @@ Think of an image mode system like a phone or an appliance. The OS image is the 
 The image build (Containerfile) is where your RPM gets installed. The running system is where your app does its work, reading from the read-only image and writing to `/var` and `/etc`.
 
 If you remember one thing: **your software ships in the image, anything machine-specific waits for first boot, and machine state lives in `/var`.**
+
+## Quick reference
+
+The patterns in this guide, in one table, for looking things up after a first read. Each row links to the section with the details and the fix.
+
+| Pattern | Works on image mode? | What to do instead | Details |
+|---------|---------------------|--------------------|---------|
+| Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
+| Pulling `rhel-bootc` without a login | No, it is not on the unauthenticated registry | `podman login registry.redhat.io` first | [Getting an image](#credential-one-a-registry-login) |
+| `sudo podman login`, then a rootless `podman build` | No, the build reads a different credential file | Log in as the identity that runs the build | [Getting an image](#credential-one-a-registry-login) |
+| `RUN dnf install` on an unsubscribed build host | No, the base image carries no repositories | Build on a registered RHEL system, or mount entitlements | [Getting an image](#credential-two-entitlement-for-the-build) |
+| `curl \| bash` installer at deploy time | No, but it works as a build step | Run it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
+| RPM installed by admin post-deployment | No | Include it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
+| `%post` runs `systemctl start` | No | Use `enable` only; start happens at boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
+| Scriptlet guards `systemctl` behind a `/run/systemd/system` check | Silently skipped: build passes, image has no service | Drop the guard; `enable` works in builds | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
+| `%post` prompts for input (license key, EULA) | No, builds have no TTY and no open stdin | Config file in `/etc`, or first boot | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
+| `%post` opens ports with `firewall-cmd` | No, firewalld isn't running | Ship zone config, or run `firewall-offline-cmd` in the build | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
+| `%post` probes hardware | No, sees the build environment | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
+| `%post` phones home for licensing | No, wrong host identity | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
+| First-boot unit gated on `ConditionFirstBoot=yes` | Unreliable: machine-id can be pre-initialized | Gate on a stamp file in `/var` instead | [First boot](#do-machine-specific-setup-at-first-boot) |
+| DKMS compile on the deployed host | No | Compile in the build against the image's kernel; ship the result | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
+| `%post` edits `/boot` or GRUB config | No, bootc owns kernel and bootloader | Ship kernel arguments as a `kargs.d` TOML | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
+| Credentials in `.repo` files or image layers | No, layers are readable by anyone who can pull | Use build secrets | [Repo files and credentials](#repo-files-gpg-keys-and-credentials) |
+| Assuming `/var/lib/<pkg>` exists at runtime | Not guaranteed | `tmpfiles.d` or `StateDirectory=` | [/var rules](#var-starts-from-the-image-then-belongs-to-the-machine) |
+| Package creates a physical `/var/run` directory | No, fatal lint error | It's a symlink to `/run`; leave it alone | [/var rules](#var-starts-from-the-image-then-belongs-to-the-machine) |
+| Install to `/opt/<vendor>/` (all content) | Partially, read-only at runtime | Symlink writable subdirs to `/var` | [/opt](#opt-is-read-only-at-runtime) |
+| Writing runtime data to `/opt/<pkg>/data/` | No, read-only | Use `/var/lib/<pkg>/` | [/opt](#opt-is-read-only-at-runtime) |
+| Drop binaries into `/usr/local` at runtime | No, read-only | Install at build time | [/usr/local](#usrlocal-same-rules-as-usr) |
+| Self-updating agent binaries | No | Update via the image rebuild pipeline | [Self-updating software](#self-updating-software-will-not-work) |
+| Auto-update signature DB under `/opt` | No, read-only | Store mutable data in `/var/lib/` | [Self-updating software](#self-updating-software-will-not-work) |
+| `dnf install` a debug tool on a live system | Only transiently | `bootc usr-overlay`, or a tools container | [Debugging](#debugging-on-a-running-system) |
+| Ansible/Puppet `dnf install` at runtime | No | Packages in the Containerfile; config mgmt for `/etc` | [Configuration management](#configuration-management-works-differently) |
+| Config files in `/etc` only | Works, but upgrade behavior differs | Defaults in `/usr`, overrides in `/etc` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
+| `%post` creates users with `useradd` | Risky, `/etc/passwd` drift | Use `sysusers.d` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
+| Expecting `/etc` and `/var` to move together on rollback | They don't | Design for the asymmetry | [Rollbacks](#rollbacks-etc-reverts-var-does-not) |
+| Catching all of the above in a build | Yes, recommended for every build | Run `bootc container lint` on your test builds; ship the line in your snippet | [Lint](#run-bootc-container-lint-in-the-build) |

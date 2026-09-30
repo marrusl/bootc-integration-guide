@@ -55,9 +55,3 @@ Two specifics that a real run would settle:
 When a vendor's `/opt` tree genuinely can't be restructured, the guide names one escape hatch, a state overlay, and treats it as a last resort. bootc documents a second, more drastic option: a transient root that makes the whole filesystem writable until reboot. This isn't a factual gap: the mechanism is documented and understood. It's a judgment call about whether naming a bigger hammer, in a section that already argues against reaching for the first one, helps readers or just adds noise.
 
 **What would settle it:** a proposed sentence, in an issue or a pull request. If it reads as useful rather than as more to skim past, it goes in.
-
-### A least-privilege note on the persisted pull-secret case
-
-The credentials section draws a line between build-time secrets, which should never end up in a layer, and a secret that has to exist on the deployed host (a pull secret for a bound image, for example), which RHEL's own documentation deliberately persists in the image. The section opens by pointing out that anyone who can pull an image can read every file in it, and that's still true of a persisted pull secret.
-
-**What would settle it:** nothing external: this one's ours to write. A sentence recommending the persisted credential be scoped to read-only pull access would close the gap. A pull request with proposed wording is the fastest path.
