@@ -175,8 +175,11 @@ On traditional RHEL, you can `dnf install` anytime. On image mode, the OS image 
 
 ```dockerfile
 FROM registry.redhat.io/rhel10/rhel-bootc:latest
-RUN dnf install -y your-package && dnf clean all
+RUN dnf install -y your-package && dnf clean all && \
+    rm -rf /var/{cache,log} /var/lib/{dnf,rhsm}
 ```
+
+The second line is not cosmetic. `dnf` leaves logs under `/var/log`, caches under `/var/cache`, and, on an entitled build host, subscription state under `/var/lib/rhsm`, and none of it belongs on a customer's machine. `bootc container lint` warns on non-empty files under `/var/log` for exactly this reason, and Red Hat's own examples carry the same cleanup.
 
 The wall is *when*, not *how*. RPM packaging is not a requirement: the build can run your install script (`RUN ./install.sh`), `COPY` in unpackaged content, or unpack a tarball, and the result ships in the image like anything else. Whatever your installer does, it runs under the build-environment caveats in the next section (no systemd, no hardware, no booted kernel).
 

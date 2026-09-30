@@ -25,7 +25,8 @@ FROM registry.redhat.io/rhel10/rhel-bootc:latest
 COPY myvendor.repo /etc/yum.repos.d/
 COPY RPM-GPG-KEY-myvendor /etc/pki/rpm-gpg/
 
-RUN dnf -y install myvendor-agent && dnf clean all
+RUN dnf -y install myvendor-agent && dnf clean all && \
+    rm -rf /var/{cache,log} /var/lib/{dnf,rhsm}
 RUN systemctl enable myvendor-agent.service
 
 RUN bootc container lint
