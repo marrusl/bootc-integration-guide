@@ -16,7 +16,7 @@ The supported path is one tool, bootc-image-builder, with a different output typ
 
 ## The supported path: a disk image, booted with KVM
 
-This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL book.
+This is the RHEL-documented flow, condensed from [Creating QEMU disk images](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/creating-bootc-compatible-base-disk-images-by-using-bootc-image-builder#creating-qcow2-images-by-using-bootc-image-builder) and [Deploying with KVM](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-kvm-with-a-qcow2-disk-image) in the RHEL documentation.
 
 If you do not have a Containerfile yet, this is the smallest complete one. Each line is a section of the guide:
 
@@ -70,7 +70,7 @@ $ sudo virt-install --name myvendor-test --memory 4096 --vcpus 2 \
 
 ## VMware
 
-vSphere takes a VMDK. The builder command above with `--type vmdk` writes `./output/vmdk/disk.vmdk`, and the `config.toml` user works there too. Workstation and Fusion can attach that disk to a new VM directly. For vSphere itself, the RHEL book's [vSphere section](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-and-creating-a-rhel-virtual-machine-in-vsphere) covers the import with `govc` and the cloud-init metadata a production VM wants; a test VM does not need the metadata.
+vSphere takes a VMDK. The builder command above with `--type vmdk` writes `./output/vmdk/disk.vmdk`, and the `config.toml` user works there too. Workstation and Fusion can attach that disk to a new VM directly. For vSphere itself, the [vSphere section](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-and-creating-a-rhel-virtual-machine-in-vsphere) of the RHEL documentation covers the import with `govc` and the cloud-init metadata a production VM wants; a test VM does not need the metadata.
 
 ## Anything else: an installer ISO
 
@@ -120,9 +120,9 @@ $ sudo bootc upgrade --apply
 
 After it comes back: the changed default applies where `/etc` was untouched and does not where it was edited, per [the `/etc` merge]({{ '/' | relative_url }}#your-defaults-their-customizations-and-the-etc-merge). The new `/var` file is not there, because `/var` belongs to the machine after first deployment, per [the `/var` rules]({{ '/' | relative_url }}#var-starts-from-the-image-then-belongs-to-the-machine). And `sudo bootc rollback` followed by a reboot puts `/etc` back and leaves `/var` alone, per [rollbacks]({{ '/' | relative_url }}#rollbacks-etc-reverts-var-does-not).
 
-## Where the RHEL book goes further
+## Where the RHEL documentation goes further
 
-None of this changes what your package has to do. That is the same on every target. When a customer asks about a route this page does not cover, the RHEL book has it:
+None of this changes what your package has to do. That is the same on every target. When a customer asks about a route this page does not cover, the RHEL documentation has it:
 
 - [AWS, with an AMI](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-to-aws-with-an-ami-disk-image)
 - [Bare metal, with `bootc install` from a booted ISO](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-bootc)

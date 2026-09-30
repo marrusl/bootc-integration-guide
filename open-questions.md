@@ -66,7 +66,7 @@ Two specifics that a real run would settle:
 
 ### The test VM page has not been run end to end
 
-[Booting your image in a test VM]({{ '/test-vm/' | relative_url }}) condenses the RHEL book's disk-image and KVM procedures, and every command on it traces to that book, to bcvk's own documentation, or to the Podman Desktop bootc extension's README. Three of its claims go one step past what those sources say:
+[Booting your image in a test VM]({{ '/test-vm/' | relative_url }}) condenses the disk-image and KVM procedures from the RHEL documentation, and every command on it traces there, to bcvk's own documentation, or to the Podman Desktop bootc extension's README. Three of its claims go one step past what those sources say:
 
 - The installer ISO on a hypervisor other than KVM. RHEL 10 lists the ISO type as Technology Preview, and the page names Parallels as the case in mind without having booted it there.
 - A `config.toml` user on a VMDK attached directly to Workstation or Fusion, without the cloud-init metadata the vSphere procedure supplies.
