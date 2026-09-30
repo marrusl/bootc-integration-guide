@@ -141,7 +141,7 @@ If you want to shake out filesystem-model problems today and the account paperwo
 $ podman pull quay.io/centos-bootc/centos-bootc:stream10
 ```
 
-Most of this guide's walls are properties of bootc rather than of RHEL, so a read-only `/opt`, a `/var` that isn't seeded, or a scriptlet that calls `systemctl start` will show up there just as they would on RHEL. It is a fast way to find out where the work is. It is not RHEL: the package set, the kernel, and the support story all differ, so anything you intend to claim support for has to be built and tested against `rhel-bootc`.
+Most of what this guide explains is a property of bootc rather than of RHEL, so a read-only `/opt`, a `/var` that isn't seeded, or a scriptlet that calls `systemctl start` will show up there just as they would on RHEL. It is a fast way to find out where the work is. It is not RHEL: the package set, the kernel, and the support story all differ, so anything you intend to claim support for has to be built and tested against `rhel-bootc`.
 
 ### Confirming you have what you think you have
 

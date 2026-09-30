@@ -4,7 +4,7 @@ title: Booting your image in a test VM
 permalink: /test-vm/
 ---
 
-You have built an image with your package in it. Before you can say anything about how it behaves, it has to boot, and a virtual machine is where nearly all of that testing happens. Every wall in [the guide]({{ '/' | relative_url }}) except Secure Boot module signing and real hardware probing shows up in a VM exactly as it does on metal.
+You have built an image with your package in it. Before you can say anything about how it behaves, it has to boot, and a virtual machine is where nearly all of that testing happens. Everything [the guide]({{ '/' | relative_url }}) explains, except Secure Boot module signing and real hardware probing, shows up in a VM exactly as it does on metal.
 
 Three things to know before picking a route:
 
@@ -105,7 +105,7 @@ After it comes back: the changed default applies where `/etc` was untouched and 
 
 ## Where the RHEL book goes further
 
-None of this changes what your package has to do. The walls are the same on every target. When a customer asks about a route this page does not cover, the RHEL book has it:
+None of this changes what your package has to do. That is the same on every target. When a customer asks about a route this page does not cover, the RHEL book has it:
 
 - [AWS, with an AMI](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-to-aws-with-an-ami-disk-image)
 - [Bare metal, with `bootc install` from a booted ISO](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/deploying-the-rhel-bootc-images#deploying-a-container-image-by-using-bootc)
