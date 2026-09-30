@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "Getting your app on image mode for RHEL: what you need to know"
+title: "Getting Your App on Image Mode for RHEL: What You Need to Know"
 ---
 
 If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting image mode for RHEL (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Most of those fixes live in the image build your customer already runs, and a smaller set needs a change only you can make. [How much work is this?](#how-much-work-is-this) sorts them, so you can tell early which one you are behind. You don't need to become a bootc expert. You need to know where the walls are.
