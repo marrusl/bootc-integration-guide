@@ -37,18 +37,6 @@ The guide's Containerfile example builds a driver against the image's own kernel
 
 One prerequisite that isn't obvious: the build has to run somewhere entitled. The base image ships with no repository configuration and no entitlement certificates of its own (`/etc/yum.repos.d/` and `/etc/pki/entitlement/` are both empty, and `dnf repolist` inside it reports no repositories), so it picks up RHEL content from a registered build host or from entitlement certificates mounted as build secrets. Pulling the image needs only a registry login; building the example needs entitlement. On an unregistered host the build stops at the first `dnf install` for want of repositories, which tells you nothing about whether the example is correct.
 
-### Whether `rhel-bootc` ships an empty `/etc/machine-id`
-
-The first-boot section says `ConditionFirstBoot=yes` never fires on a stock image because the base image ships `/etc/machine-id` as an empty file, which systemd does not count as a first boot. The systemd half is documented in `machine-id(5)`. The base-image half is verified for CentOS Stream bootc: rpm-ostree's `machineid-compat` option defaults to creating the file empty, and the centos-bootc manifests leave the default. `rhel-bootc` is inferred from the same build pipeline, not read from the image.
-
-**What would settle it:** one command against the image, no build needed:
-
-```
-$ podman run --rm registry.redhat.io/rhel10/rhel-bootc:latest sh -c 'ls -l /etc/machine-id; wc -c < /etc/machine-id'
-```
-
-Zero bytes confirms the section as written. Fourteen bytes means the file contains `uninitialized`, the condition does fire on a stock image, and the section needs rewording (the stamp-file advice would still stand, since cloned VMs fail the condition regardless).
-
 ### The walkthrough for getting an image has not been run end to end
 
 The [Getting a RHEL bootc image]({{ '/' | relative_url }}#getting-a-rhel-bootc-image) section is assembled from Red Hat's registry authentication documentation, the RHEL image mode documentation, and three live checks against the registries: `rhel-bootc` returns `UNSUPPORTED` on `registry.access.redhat.com` and `401` unauthenticated on `registry.redhat.io`, and the CentOS Stream bootc tags are public on Quay. Nobody has walked the whole path on a fresh account: sign up, log in, pull, build.
