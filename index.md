@@ -117,6 +117,8 @@ $ podman login --authfile ~/.config/containers/auth.json registry.redhat.io
 
 That path is the second stop in the documented search order, so `podman build`, `buildah`, and `skopeo` find it without being told. The file holds the credential base64-encoded, not encrypted, which is fine on a workstation and one more reason to keep personal logins off shared machines.
 
+On macOS and Windows, the Red Hat Authentication extension for [Podman Desktop](https://podman-desktop.io/), upstream or the Red Hat build, does this step for you: sign in with your Red Hat account and it logs the Podman machine in to `registry.redhat.io`. It also registers that machine with your developer subscription, which is the next credential.
+
 For CI or any shared build host, don't put a person's Customer Portal credentials on it. Red Hat provides [registry service accounts](https://access.redhat.com/terms-based-registry/) for exactly this: tokens scoped to registry pulls, one per shared system.
 
 ### Credential two: entitlement for the build
@@ -129,7 +131,7 @@ The short version: **run your builds on a registered, subscribed RHEL system.** 
 
 If you don't have a RHEL subscription to register that host with, the no-cost [Red Hat Enterprise Linux Developer Subscription](https://access.redhat.com/solutions/4078831) is the route most partner engineers take to a working build box. Note that it is a separate thing from the developer *account* in the previous section: the account lets you pull the image, the subscription is what makes `dnf` work once you're building against it. Signing up for the Developer Program does not enroll you in it.
 
-A developer laptop running macOS or Ubuntu is not a registered RHEL host, and neither is a stock CI runner. Fedora, CentOS Stream, and the RHEL rebuilds package `subscription-manager` and the same Podman mount configuration, so registering one of them with the developer subscription gets you the same result as the RHEL host above. Everywhere else the entitlement has to come from certificates you mount as build secrets. That is a legitimate documented pattern, covered in [Repo files, GPG keys, and credentials](#repo-files-gpg-keys-and-credentials) along with why the certificates must not end up in a layer. Whether your subscription terms cover a given CI setup, or a developer subscription covers a given build box, is a question for your Red Hat agreement rather than this guide.
+A developer laptop running macOS, Windows, or Ubuntu is not a registered RHEL host, and neither is a stock CI runner. Two shortcuts cover most laptops. Fedora, CentOS Stream, and the RHEL rebuilds package `subscription-manager` and the same Podman mount configuration, so registering one of them with the developer subscription gets you the same result as the RHEL host above. On macOS and Windows, the [Red Hat Authentication extension](https://github.com/redhat-developer/podman-desktop-redhat-account-ext) for Podman Desktop, upstream or the Red Hat build, registers the Podman machine with the developer subscription when you sign in, and builds inside that machine are entitled the same way. Everywhere else the entitlement has to come from certificates you mount as build secrets. That is a legitimate documented pattern, covered in [Repo files, GPG keys, and credentials](#repo-files-gpg-keys-and-credentials) along with why the certificates must not end up in a layer. Whether your subscription terms cover a given CI setup, or a developer subscription covers a given build box, is a question for your Red Hat agreement rather than this guide.
 
 ### Trying the model before you have credentials
 
@@ -156,6 +158,7 @@ The first tells you which RHEL you actually pulled, which matters when `latest` 
 
 - Get a Red Hat login (Developer Program or trial if you don't have one), then `podman login registry.redhat.io` as the identity that runs your builds, on Linux with `--authfile` pointed at a path that survives a reboot.
 - Run your builds on a registered, subscribed RHEL system, or a Fedora, CentOS Stream, or RHEL rebuild host registered with `subscription-manager` the same way. The no-cost developer subscription is the usual way to get one; it is a separate signup from the developer account. Off such a host, mount entitlement certificates as build secrets.
+- On macOS and Windows, sign in through the Red Hat Authentication extension for Podman Desktop, upstream or the Red Hat build: it handles both the registry login and the Podman machine's subscription.
 - Use registry service accounts, not personal credentials, on CI and shared build hosts.
 - Pin to a digest if your results need to be reproducible.
 
