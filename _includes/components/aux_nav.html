@@ -1,0 +1,25 @@
+{%- comment -%}
+  Overrides components/aux_nav.html: the theme renders site.aux_links on
+  every page, which puts a link to the current page in its own header.
+  This renders the other pages instead: the guide links out to the two
+  secondary pages, and each of those links back to the guide first.
+{%- endcomment -%}
+<nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    {%- if page.url != '/' %}
+    <li class="aux-nav-list-item">
+      <a href="{{ '/' | relative_url }}" class="site-button">Back to the guide</a>
+    </li>
+    {%- endif %}
+    {%- if page.url != '/test-vm/' %}
+    <li class="aux-nav-list-item">
+      <a href="{{ '/test-vm/' | relative_url }}" class="site-button">Testing in a VM</a>
+    </li>
+    {%- endif %}
+    {%- if page.url != '/open-questions/' %}
+    <li class="aux-nav-list-item">
+      <a href="{{ '/open-questions/' | relative_url }}" class="site-button">Open questions</a>
+    </li>
+    {%- endif %}
+  </ul>
+</nav>

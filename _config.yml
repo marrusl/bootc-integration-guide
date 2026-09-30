@@ -23,10 +23,12 @@ gh_edit_repository: https://github.com/marrusl/bootc-integration-guide
 gh_edit_branch: main
 gh_edit_view_mode: edit
 
-# aux_nav.html reads these values raw, with no relative_url filter, so the
-# internal link is spelled out in full rather than site-root-relative.
+# The theme's header renders the auxiliary nav only when aux_links is
+# non-empty. What it shows comes from _includes/components/aux_nav.html,
+# which overrides the theme and picks links per page so no page links to
+# itself. The entries here keep the nav enabled and document the pages.
 aux_links:
-  "Test VM":
+  "Testing in a VM":
     - "https://marrusl.github.io/bootc-integration-guide/test-vm/"
   "Open questions":
     - "https://marrusl.github.io/bootc-integration-guide/open-questions/"
