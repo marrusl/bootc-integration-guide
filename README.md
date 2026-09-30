@@ -1,12 +1,12 @@
 # bootc Integration Guide
 
-A practical guide for getting host RPM software working on RHEL image mode (bootc).
+A practical guide for getting host RPM software working on image mode for RHEL (bootc).
 
 **Read it here: [marrusl.github.io/bootc-integration-guide](https://marrusl.github.io/bootc-integration-guide/)**
 
 ## Who this is for
 
-Partner integration engineers: your company ships software as a host RPM or an installer, your customers are adopting RHEL image mode, and you won't build the bootc image yourself. Your customer does that. This guide is for you.
+Partner integration engineers: your company ships software as a host RPM or an installer, your customers are adopting image mode for RHEL, and you won't build the bootc image yourself. Your customer does that. This guide is for you.
 
 ## What it covers
 
@@ -14,7 +14,7 @@ Upstream bootc docs are written for the people who build OS images. RHEL docs ar
 
 ## Status
 
-**Pre-1.0 working draft.** It's public because it's useful now, not because it's finished. Expect gaps, and expect it to keep changing as bootc and RHEL image mode do.
+**Pre-1.0 working draft.** It's public because it's useful now, not because it's finished. Expect gaps, and expect it to keep changing as bootc and image mode for RHEL do.
 
 The guide's core model is verified against upstream bootc and RHEL documentation. A short list of narrower specifics, ones that need a booted system, a real build, or a source we couldn't fully reach, are tracked on the [open questions](https://marrusl.github.io/bootc-integration-guide/open-questions/) page. If you can settle one, that's a welcome pull request or issue.
 

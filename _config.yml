@@ -1,7 +1,7 @@
 title: bootc Integration Guide
 description: >-
   A practical guide for partner integration engineers adapting host RPM
-  software for RHEL image mode (bootc).
+  software to image mode for RHEL (bootc).
 
 remote_theme: just-the-docs/just-the-docs@v0.12.0
 plugins:

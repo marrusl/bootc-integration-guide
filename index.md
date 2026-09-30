@@ -1,15 +1,15 @@
 ---
 layout: default
-title: "Getting Your App on RHEL Image Mode: What You Need to Know"
+title: "Getting your app on image mode for RHEL: what you need to know"
 ---
 
-If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting RHEL image mode (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Most of those fixes live in the image build your customer already runs, and a smaller set needs a change only you can make. [How much work is this?](#how-much-work-is-this) sorts them, so you can tell early which one you are behind. You don't need to become a bootc expert. You need to know where the walls are.
+If your product ships to customers as a host RPM or an installer (agents, monitoring tools, security scanners, drivers, enterprise applications) and they are adopting image mode for RHEL (bootc), this guide is for you. The message up front: what you need to change might be less than you think. Most of what you already ship works unchanged. The walls are a short list, clearly marked, and each one has a standard fix. Most of those fixes live in the image build your customer already runs, and a smaller set needs a change only you can make. [How much work is this?](#how-much-work-is-this) sorts them, so you can tell early which one you are behind. You don't need to become a bootc expert. You need to know where the walls are.
 
 If your product is already container-native, you can skip most of this guide. Start with [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all) and stop there.
 
 Why this guide exists: upstream bootc docs are written for the people who build OS images. RHEL docs are written for the people who run the systems. This guide is for the vendor whose software ends up inside an image someone else builds.
 
-**Version 0.80, written against RHEL 10 image mode and bootc as of 2026-09-30.**
+**Version 0.80, written against image mode for RHEL 10 and bootc as of 2026-09-30.**
 
 A handful of specifics are still being checked against a live system or a real build rather than documentation alone. See [open questions]({{ '/open-questions/' | relative_url }}) for what's unverified and how to help settle it.
 
@@ -19,17 +19,17 @@ On image mode, the operating system ships as a container image. The customer bui
 
 Where to go deeper:
 
-- [Image mode for RHEL](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux-10/image-mode): Red Hat's product page for image mode. The shortest orientation to what Red Hat is shipping and how it is positioned, which is often what a colleague actually wants when they ask you what this is.
+- [Image mode for RHEL](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux-10/image-mode): Red Hat's overview page for image mode. The shortest orientation to what Red Hat is shipping and how it is positioned, which is often what a colleague actually wants when they ask you what this is.
 - [bootc project](https://github.com/bootc-dev/bootc): never seen bootc? Start with the project README for the what and the why.
 - [bootc filesystem docs](https://github.com/bootc-dev/bootc/blob/main/docs/src/bootc-filesystem.7.md): the full version of the filesystem model summarized in the table below.
 - [bootc building guidance](https://github.com/bootc-dev/bootc/blob/main/docs/src/building/bootc-building-images.7.md): upstream's Containerfile patterns for adapting packages; the closest upstream counterpart to this guide.
-- [RHEL 10 image mode documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html-single/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/index): the full RHEL reference for building, deploying, and managing image mode systems.
+- [Image mode for RHEL 10 documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html-single/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/index): the full RHEL reference for building, deploying, and managing image mode systems.
 
 ## The one thing to understand first
 
-RHEL image mode has a different filesystem model than traditional RHEL. Once you internalize this, everything else follows:
+Image mode for RHEL has a different filesystem model than traditional RHEL. Once you internalize this, everything else follows:
 
-| Path | Traditional RHEL | Image Mode |
+| Path | Traditional RHEL | Image mode |
 |------|-----------------|------------|
 | `/` (root), `/usr`, `/opt`, `/usr/local` | Read-write | **Read-only** (ships with the image) |
 | `/etc` | Read-write, RPM-managed | Read-write, but merges differently on upgrades |
@@ -52,7 +52,7 @@ If your software can run as a container, most of this guide stops applying to yo
 
 The patterns in this guide are not equally expensive, and the difference that matters most is not how technical the fix is. It is how much of the fix is yours to make, and how much your customer can do in their own image build with what you ship today. Four buckets, in rising order of your involvement. Each ends with something you publish, because a path you have documented is different from one a customer found to work. Software that can run as a container instead is [the first question](#first-question-does-it-need-to-be-in-the-os-image-at-all), and it is worth answering before any of the rest.
 
-**Bucket 1: nothing changes.** A `.repo` file, your GPG key, a `RUN dnf install` or `RUN ./install.sh`, and you are done: plain files, nothing about your software changes. Most software lands here. Confirm it rather than assume it: run `bootc container lint` against a test build and read your scriptlets with `rpm -qp --scripts`. The silent failure in [the build environment](#the-build-environment-is-a-container-not-a-booted-system) leaves your service unenabled without failing the build: a green build is not by itself evidence. What you ship is the statement: "installs with `dnf install`, supported on RHEL image mode" is the whole of it.
+**Bucket 1: nothing changes.** A `.repo` file, your GPG key, a `RUN dnf install` or `RUN ./install.sh`, and you are done: plain files, nothing about your software changes. Most software lands here. Confirm it rather than assume it: run `bootc container lint` against a test build and read your scriptlets with `rpm -qp --scripts`. The silent failure in [the build environment](#the-build-environment-is-a-container-not-a-booted-system) leaves your service unenabled without failing the build: a green build is not by itself evidence. What you ship is the statement: "installs with `dnf install`, supported on image mode for RHEL" is the whole of it.
 
 **Bucket 2: a workaround the customer can apply.** Your software is fine, but the build has to be adjusted, and the customer can make the adjustment in their own Containerfile with what you ship today. The common case is an `/opt` tree mixing read-only content with directories your software writes to: logs, caches, a definitions database. Move those to `/var`, symlink them back, and ship `tmpfiles.d` entries so the targets exist on every machine, not only newly provisioned ones. See [`/opt`](#opt-is-read-only-at-runtime). Customers work this out on their own all the time. What you ship is the snippet, documented, so the workaround is the supported path.
 

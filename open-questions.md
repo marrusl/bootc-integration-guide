@@ -4,7 +4,7 @@ title: Open questions
 permalink: /open-questions/
 ---
 
-This guide's core model, read-only image content, how `/var` and `/etc` behave, the three-way merge on upgrades, checks out against upstream bootc documentation and RHEL's own image mode documentation. What follows is narrower: specifics that need a live system or a real build to settle rather than documentation alone, plus a couple of wording calls that are ours to make.
+This guide's core model, read-only image content, how `/var` and `/etc` behave, the three-way merge on upgrades, checks out against upstream bootc documentation and RHEL's own documentation for image mode. What follows is narrower: specifics that need a live system or a real build to settle rather than documentation alone, plus a couple of wording calls that are ours to make.
 
 Each entry names what the guide currently says, what's still open, and the smallest concrete thing that would close it. If you can answer one, open a pull request or an issue. Publishing pre-1.0 with the door open is the whole point.
 
@@ -39,7 +39,7 @@ One prerequisite that isn't obvious: the build has to run somewhere entitled. Th
 
 ### The walkthrough for getting an image has not been run end to end
 
-The [Getting a RHEL bootc image]({{ '/' | relative_url }}#getting-a-rhel-bootc-image) section is assembled from Red Hat's registry authentication documentation, the RHEL image mode documentation, and three live checks against the registries: `rhel-bootc` returns `UNSUPPORTED` on `registry.access.redhat.com` and `401` unauthenticated on `registry.redhat.io`, and the CentOS Stream bootc tags are public on Quay. Nobody has walked the whole path on a fresh account: sign up, log in, pull, build.
+The [Getting a RHEL bootc image]({{ '/' | relative_url }}#getting-a-rhel-bootc-image) section is assembled from Red Hat's registry authentication documentation, the RHEL documentation for image mode, and three live checks against the registries: `rhel-bootc` returns `UNSUPPORTED` on `registry.access.redhat.com` and `401` unauthenticated on `registry.redhat.io`, and the CentOS Stream bootc tags are public on Quay. Nobody has walked the whole path on a fresh account: sign up, log in, pull, build.
 
 Two specifics that a real run would settle:
 

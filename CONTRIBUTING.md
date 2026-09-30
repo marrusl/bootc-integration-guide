@@ -4,7 +4,7 @@ Corrections and additions are welcome, as a pull request or an issue. This is a 
 
 ## What this guide is
 
-The guide is written for partner integration engineers: vendors adapting host RPM software for customers who are adopting RHEL image mode (bootc). It assumes that lens throughout. If a contribution reads like it's written for someone building their own bootc image from scratch, it's probably a better fit for the upstream bootc docs or the RHEL documentation than for this guide.
+The guide is written for partner integration engineers: vendors adapting host RPM software for customers who are adopting image mode for RHEL (bootc). It assumes that lens throughout. If a contribution reads like it's written for someone building their own bootc image from scratch, it's probably a better fit for the upstream bootc docs or the RHEL documentation than for this guide.
 
 ## Technical claims need a source
 
