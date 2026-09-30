@@ -92,7 +92,9 @@ and is only available on registry.redhat.io"}]}
 
 Unauthenticated requests to `registry.redhat.io` itself return `401`. There is no anonymous path to these images.
 
-For the tag to build against, check the [Red Hat Ecosystem Catalog](https://catalog.redhat.com/search) rather than a list printed here: `latest` moves, and which minor-version tags exist changes over the release's life. If your test results need to be reproducible, resolve the tag to a digest once (`skopeo inspect`) and pin that.
+For the tag to build against, check the Red Hat Ecosystem Catalog rather than a list printed here: `latest` moves, and which minor-version tags exist changes over the release's life. The catalog does not make these images easy to find. A plain search for "bootc" returns dozens of product and software entries. Set the search type to Containers and [search for `rhel-bootc`](https://catalog.redhat.com/en/search?searchType=containers&q=rhel-bootc), and the two results are titled "RHEL 10 Bootc Base Image" and "RHEL 9 Bootc Base Image" rather than by repository name. Or go straight to the repository pages: [rhel10/rhel-bootc](https://catalog.redhat.com/en/software/containers/rhel10/rhel-bootc/6707d29f27f63a06f7873ee2) and [rhel9/rhel-bootc](https://catalog.redhat.com/en/software/containers/rhel9/rhel-bootc/6605573d4dbfe41c3d839c69).
+
+On the repository page, "Change version" lists the tags, and two kinds are mixed together: version tags such as `10.2-1790759154`, which tell you which minor release you are getting, and bare build numbers such as `1790754428`, which is what the page's copy-and-paste pull command uses. Build against a version tag or `latest`. The page also shows one architecture at a time, so check the architecture selector before reading a digest off it. If your test results need to be reproducible, resolve the tag to a digest once (`skopeo inspect`) and pin that.
 
 ### Credential one: a registry login
 
@@ -473,6 +475,7 @@ The patterns in this guide, in one table, for looking things up after a first re
 | Pattern | Works on image mode? | What to do instead | Details |
 |---------|---------------------|--------------------|---------|
 | Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
+| Finding `rhel-bootc` in the Ecosystem Catalog | Not by that name: the entries are titled "RHEL 10 Bootc Base Image" | Containers search for `rhel-bootc`, or the direct links | [Getting an image](#where-the-images-are) |
 | Pulling `rhel-bootc` without a login | No, it is not on the unauthenticated registry | `podman login registry.redhat.io` first | [Getting an image](#credential-one-a-registry-login) |
 | `sudo podman login`, then a rootless `podman build` | No, the build reads a different credential file | Log in as the identity that runs the build | [Getting an image](#credential-one-a-registry-login) |
 | Registry login gone after a reboot | Expected: the Linux default `auth.json` lives on a tmpfs | `podman login --authfile ~/.config/containers/auth.json` | [Getting an image](#credential-one-a-registry-login) |
