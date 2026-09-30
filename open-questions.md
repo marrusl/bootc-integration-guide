@@ -45,6 +45,7 @@ Two specifics that a real run would settle:
 
 - Whether a Red Hat Developer Program account is sufficient to pull `rhel10/rhel-bootc`, or whether the terms acceptance in that error message is a step of its own that a developer account does not clear.
 - The rootless-versus-root credential mismatch. The credential paths come from `containers-auth.json(5)` and the conclusion follows from them, but the failure has not been reproduced, so the error text a partner actually sees is not quoted.
+- Whether a Fedora, CentOS Stream, or RHEL rebuild host registered with `subscription-manager` passes its entitlement into a build the way a registered RHEL host does. On Fedora and CentOS Stream, `containers-common` installs the same `mounts.conf` and `/usr/share/rhel/secrets` symlinks RHEL uses (checked against the Fedora rawhide and CentOS Stream 10 spec files, 2026-09-29), so the packaging says yes. Nobody has run the build.
 
 **What would settle it:** one pass through the section on a machine with no Red Hat credentials on it yet, noting anywhere the steps don't match what happens. The tag question travels with it: the section deliberately points at the Ecosystem Catalog instead of listing tags, and if a stable minor-version tag scheme turns out to exist it is worth naming.
 
