@@ -327,7 +327,7 @@ ExecStart=/usr/lib/mypackage/firstboot.sh
 WantedBy=multi-user.target
 ```
 
-Two mechanism notes. First, the trigger: `ConditionFirstBoot=yes` looks like the obvious choice, but it keys off an uninitialized `/etc/machine-id`, and some provisioning flows initialize that before first boot, so the unit never fires. The stamp file works in every flow. Second, the stamp: have the script create `/var/lib/mypackage/.setup-done` as its last step, only on success. A failed run then retries on the next boot, so make the script idempotent.
+Two mechanism notes. First, the trigger: `ConditionFirstBoot=yes` looks like the obvious choice, but systemd counts a boot as the first one only when `/etc/machine-id` is missing or contains `uninitialized`; see [First Boot Semantics](https://www.freedesktop.org/software/systemd/man/latest/machine-id.html#First%20Boot%20Semantics) in `machine-id(5)`. An empty file does not count, and the bootc base images ship it empty, a default rpm-ostree documents under [`machineid-compat`](https://coreos.github.io/rpm-ostree/treefile/), so on a stock image the condition is never true. Cloned VMs fail it the same way, since `virt-sysprep` truncates the file rather than removing it. The stamp file works in every flow. Second, the stamp: have the script create `/var/lib/mypackage/.setup-done` as its last step, only on success. A failed run then retries on the next boot, so make the script idempotent.
 
 **What to do:** Ship a oneshot service gated on a stamp file in `/var`. Do discovery, registration, and activation there, not in `%post`. Write the stamp only on success. Document what the service needs (network access, a license key in `/etc`) so customers can supply it.
 
@@ -485,7 +485,7 @@ The patterns in this guide, in one table, for looking things up after a first re
 | `%post` opens ports with `firewall-cmd` | No, firewalld isn't running | Ship zone config, or run `firewall-offline-cmd` in the build | [Build environment](#the-build-environment-is-a-container-not-a-booted-system) |
 | `%post` probes hardware | No, sees the build environment | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
 | `%post` phones home for licensing | No, wrong host identity | Defer to a first-boot service | [Build vs. deploy machine](#you-build-on-one-machine-and-deploy-to-another) |
-| First-boot unit gated on `ConditionFirstBoot=yes` | Unreliable: machine-id can be pre-initialized | Gate on a stamp file in `/var` instead | [First boot](#do-machine-specific-setup-at-first-boot) |
+| First-boot unit gated on `ConditionFirstBoot=yes` | Never fires: the base image ships an empty `machine-id`, which systemd does not count as a first boot | Gate on a stamp file in `/var` instead | [First boot](#do-machine-specific-setup-at-first-boot) |
 | DKMS compile on the deployed host | No | Compile in the build against the image's kernel; ship the result | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
 | `%post` edits `/boot` or GRUB config | No, bootc owns kernel and bootloader | Ship kernel arguments as a `kargs.d` TOML | [Kernel modules](#kernel-modules-build-against-the-images-kernel) |
 | Credentials in `.repo` files or image layers | No, layers are readable by anyone who can pull | Use build secrets | [Repo files and credentials](#repo-files-gpg-keys-and-credentials) |
