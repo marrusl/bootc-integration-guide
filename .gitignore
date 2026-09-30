@@ -26,6 +26,13 @@ vendor/bundle/
 .LSOverride
 ._*
 
+# Obsidian
+# The repo gets drafted in Obsidian (symlinked into a vault). Anything
+# Obsidian writes here is local workspace state — pane layout, plugin
+# settings, graph positions — and none of it is content.
+.obsidian/
+.trash/
+
 # Editor and OS noise
 .vscode/
 .idea/
