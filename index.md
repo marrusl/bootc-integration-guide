@@ -109,6 +109,14 @@ $ podman pull registry.redhat.io/rhel10/rhel-bootc:latest
 
 One thing to get right: log in as the identity that will run the build. Red Hat's documentation writes this step as `sudo podman login`, which writes root's credential file. A rootless `podman build` afterwards reads yours, finds nothing, and fails to pull the base image with an authentication error that looks like the login didn't take. Credentials land in `${XDG_RUNTIME_DIR}/containers/auth.json` on Linux and `$HOME/.config/containers/auth.json` on macOS; see [`containers-auth.json(5)`](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md) for the full search order.
 
+The Linux default is also temporary. `${XDG_RUNTIME_DIR}` is a tmpfs that goes away when your session ends, so after a logout or a reboot the login is gone, and the next build fails with the same authentication error as if you had never logged in. To keep it, log in to the persistent file instead:
+
+```
+$ podman login --authfile ~/.config/containers/auth.json registry.redhat.io
+```
+
+That path is the second stop in the documented search order, so `podman build`, `buildah`, and `skopeo` find it without being told. The file holds the credential base64-encoded, not encrypted, which is fine on a workstation and one more reason to keep personal logins off shared machines.
+
 For CI or any shared build host, don't put a person's Customer Portal credentials on it. Red Hat provides [registry service accounts](https://access.redhat.com/terms-based-registry/) for exactly this: tokens scoped to registry pulls, one per shared system.
 
 ### Credential two: entitlement for the build
@@ -146,7 +154,7 @@ The first tells you which RHEL you actually pulled, which matters when `latest` 
 
 **What to do:**
 
-- Get a Red Hat login (Developer Program or trial if you don't have one), then `podman login registry.redhat.io` as the identity that runs your builds.
+- Get a Red Hat login (Developer Program or trial if you don't have one), then `podman login registry.redhat.io` as the identity that runs your builds, on Linux with `--authfile` pointed at a path that survives a reboot.
 - Run your builds on a registered, subscribed RHEL system, or a Fedora, CentOS Stream, or RHEL rebuild host registered with `subscription-manager` the same way. The no-cost developer subscription is the usual way to get one; it is a separate signup from the developer account. Off such a host, mount entitlement certificates as build secrets.
 - Use registry service accounts, not personal credentials, on CI and shared build hosts.
 - Pin to a digest if your results need to be reproducible.
@@ -463,6 +471,7 @@ The patterns in this guide, in one table, for looking things up after a first re
 | Agent or scanner that could ship as a container | Yes, often the simplest path | Quadlet or logically bound image | [First question](#first-question-does-it-need-to-be-in-the-os-image-at-all) |
 | Pulling `rhel-bootc` without a login | No, it is not on the unauthenticated registry | `podman login registry.redhat.io` first | [Getting an image](#credential-one-a-registry-login) |
 | `sudo podman login`, then a rootless `podman build` | No, the build reads a different credential file | Log in as the identity that runs the build | [Getting an image](#credential-one-a-registry-login) |
+| Registry login gone after a reboot | Expected: the Linux default `auth.json` lives on a tmpfs | `podman login --authfile ~/.config/containers/auth.json` | [Getting an image](#credential-one-a-registry-login) |
 | `RUN dnf install` on an unsubscribed build host | No, the base image carries no repositories | Build on a registered RHEL system, or mount entitlements | [Getting an image](#credential-two-entitlement-for-the-build) |
 | `curl \| bash` installer at deploy time | No, but it works as a build step | Run it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
 | RPM installed by admin post-deployment | No | Include it in the image build | [Installation](#software-installs-at-build-time-not-at-runtime) |
