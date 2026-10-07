@@ -454,6 +454,18 @@ On traditional RHEL, vendor default configs and local customizations both live i
 
 Also worth knowing: bootc supports a transient `/etc` (`transient = true` under `[etc]` in `/usr/lib/ostree/prepare-root.conf`, set in the image at build time), rebuilt from the image on every boot. A system with it enabled gives up persistent local `/etc` changes entirely. If your software writes config to `/etc` at runtime, know that this deployment variant exists.
 
+### SELinux labels come from policy, not from `chcon`
+
+On a fresh deployment, files under `/etc`, `/var`, `/opt` and `/usr/local` carry the labels the image's own SELinux policy assigns to their paths: `restorecon -nrv` across all four finds nothing to change. The path rules are more specific than one label per tree. The stock policy labels `/opt/<vendor>/bin` and its contents `bin_t`, while a sibling such as `/opt/<vendor>/logs` is `usr_t`, so check a path with `matchpathcon` rather than assuming.
+
+Whether a label changed on the running system lasts depends on where the file came from:
+
+- **Image content** can't be relabeled, because it is read-only. On `/opt`, `chcon` fails with `Read-only file system`, like any other write there.
+- **A file the image ships in `/etc`** is the trap. The relabel works, and the next deployment undoes it: the new deployment has the image's copy of the file with the image's label. On image mode for RHEL, which uses the ostree backend, the `/etc` merge ignores extended attributes, which is where SELinux labels are stored, so a file whose only change is its label counts as unmodified. This is the exception to the rule above that metadata changes pin a file locally.
+- **A file created on the machine**, in `/etc` or under `/var`, keeps a changed label across reboots and deployments. That label is local state that no image accounts for.
+
+**What to do:** Treat labels as part of the image. If your software needs a different label on a path, change it in the policy the image is built with, through a file-context rule in your package's SELinux policy module, and don't ship a `chcon` in a first-boot unit as the fix.
+
 ### Rollbacks: `/etc` reverts, `/var` does not
 
 A system can be rolled back to the previous OS image with `bootc rollback`. The two writable areas behave differently when that happens:
@@ -506,5 +518,6 @@ The patterns in this guide, in one table, for looking things up after a first re
 | Ansible/Puppet `dnf install` at runtime | No | Packages in the Containerfile; config mgmt for `/etc` | [Configuration management](#configuration-management-works-differently) |
 | Config files in `/etc` only | Works, but upgrade behavior differs | Defaults in `/usr`, overrides in `/etc` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
 | `%post` creates users with `useradd` | Risky, `/etc/passwd` drift | Use `sysusers.d` | [The /etc merge](#your-defaults-their-customizations-and-the-etc-merge) |
+| Fixing a label with `chcon` on a running system | Only on files created on the machine: refused on image content, undone at the next deployment on files the image ships in `/etc` | A file-context rule in your SELinux policy module, in the build | [SELinux labels](#selinux-labels-come-from-policy-not-from-chcon) |
 | Expecting `/etc` and `/var` to move together on rollback | They don't | Design for the asymmetry | [Rollbacks](#rollbacks-etc-reverts-var-does-not) |
 | Catching all of the above in a build | Yes, recommended for every build | Run `bootc container lint` on your test builds; ship the line in your snippet | [Lint](#run-bootc-container-lint-in-the-build) |

@@ -10,12 +10,6 @@ Each entry names what the guide currently says, what's still open, and the small
 
 ## If you have a booted RHEL 10 system
 
-### How SELinux labels behave across a deploy
-
-There's no SELinux section in this guide. That's deliberate rather than an omission: whether labels get reapplied fresh at each deploy from the image's own policy, and whether customizing a label means changing policy in the build rather than running `restorecon` against a live system, isn't something we could confirm without a system to check it against.
-
-**What would settle it:** boot an image, compare the label state against what the shipped policy expects (`matchpathcon`, `ls -Z`), and check whether a local relabel survives the next deployment or gets overwritten. That's enough for a short section.
-
 ### Whether a confined service can write through the `/opt` symlink
 
 The `/opt` section tells you to move writable directories into `/var` and symlink them back. The content then carries the label of its new home (`/var/log/...` is `var_log_t`), not whatever label the package's `/opt` tree had. A confined service reaching that content through its old `/opt` path may be denied where it would have been allowed at the original path. Upstream flags the same class of risk for the analogous pattern of symlinking a config file from `/etc` into `/usr`. The `/opt` section currently gives the fix without this caveat, because we don't know whether it bites in practice or only in principle.
